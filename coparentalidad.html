@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Coparentalidad</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Inter',system-ui,sans-serif;background:#f8fafc;color:#1e293b;min-height:100vh}
+    button{cursor:pointer;font-family:inherit}
+    input,select,textarea{font-family:inherit}
+    ::-webkit-scrollbar{width:4px;height:4px}
+    ::-webkit-scrollbar-track{background:#f1f5f9}
+    ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:2px}
+  </style>
+</head>
+<body>
+<div id="app"></div>
+<script type="module">
+
+const SUPABASE_URL = 'https://vghadauzsutmpwhbayxj.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_QPWLzYD62-CFJlC-0ZW8YA_W8I5rIi_';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const MONTHS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+const EXPENSE_CATS = ["Médico","Colegio","Ropa","Actividades","Alimentación","Transporte","Ocio","Otro"];
+const CUSTODY_COLORS = {J:"#2563eb",E:"#7c3aed",ambos:"#059669"};
+const CAT_COLORS = {General:"#64748b",Custodia:"#2563eb",Económico:"#059669",Salud:"#dc2626",Colegio:"#7c3aed",Vacaciones:"#d97706",Extraescolar:"#0891b2"};
+
+function today(){ return new Date().toISOString().slice(0,10); }
+function fmt(d){ if(!d) return ""; const [y,m,day]=d.slice(0,10).split("-"); return `${day}/${m}/${y}`; }
+function fmtMoney(n){ return Number(n||0).toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2})+" €"; }
+function daysBetween(from,to){ return Math.max(0,Math.round((new Date(to+"T12:00:00")-new Date(from+"T12:00:00"))/86400000)+1); }
+function daysUntil(d){ return Math.ceil((new Date(d+"T12:00:00")-new Date())/86400000); }
+function el(tag,attrs={},children=[]){
+  const e=document.createElement(tag);
+  Object.entries(attrs).forEach(([k,v])=>{
+    if(k==="style"&&typeof v==="object") Object.assign(e.style,v);
+    else if(k.startsWith("on")) e.addEventListener(k.slice(2).toLowerCase(),v);
+    else if(k==="className") e.className=v;
+    else e.setAttribute(k,v);
+  });
+  children.forEach(c=>{ if(c!=null) e.appendChild(typeof c==="string"?document.createTextNode(c):c); });
+  return e;
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let STATE = {
+  user: null, // {name, role: 'J'|'E'}
+  tab: 0,
+  expenses: [], events: [], agreements: [], messages: [], wishlist: [],
+  child: {name:"Martina",dob:"",school:"",doctor:"",ss:"",allergies:"",size_clothes:"",size_shoes:"",tutor1:"",tutor2:"",notes:""},
+  loading: false
+};
+
+let realtimeSubs = [];
+
+// ── Supabase data layer ───────────────────────────────────────────────────────
+async function loadAll(){
+  const [ev,ex,ag,ms,wl,ch] = await Promise.all([
+    sb.from("events").select("*").order("from_date"),
+    sb.from("expenses").select("*").order("date",{ascending:false}),
+    sb.from("agreements").select("*").order("date",{ascending:false}),
+    sb.from("messages").select("*").order("ts"),
+    sb.from("wishlist").select("*").order("created_at"),
+    sb.from("child_profile").select("*").limit(1).single()
+  ]);
+  STATE.events = (ev.data||[]).map(r=>({...r, from:r.from_date, to:r.to_date, changeRequest:r.change_request, changeStatus:r.change_status}));
+  STATE.expenses = (ex.data||[]).map(r=>({...r, desc:r.description, paidBy:r.paid_by, liquidatedAt:r.liquidated_at}));
+  STATE.agreements = ag.data||[];
+  STATE.messages = (ms.data||[]).map(r=>({...r, from:r.from_user}));
+  STATE.wishlist = (wl.data||[]).map(r=>({...r, requestedBy:r.requested_by, addedAt:r.added_at}));
+  if(ch.data) STATE.child = ch.data;
+}
+
+function subscribeRealtime(){
+  realtimeSubs.forEach(s=>sb.removeChannel(s));
+  realtimeSubs = [];
+  const tables=["events","expenses","agreements","messages","wishlist","child_profile"];
+  tables.forEach(t=>{
+    const ch=sb.channel(`rt-${t}`).on("postgres_changes",{event:"*",schema:"public",table:t},()=>{ loadAll().then(render); }).subscribe();
+    realtimeSubs.push(ch);
+  });
+}
+
+// ── DB mutations ──────────────────────────────────────────────────────────────
+async function addEvent(f){
+  await sb.from("events").insert({from_date:f.from,to_date:f.to,who:f.who,note:f.note,change_request:f.changeRequest,change_status:f.changeStatus,created_by:STATE.user?.role});
+  await loadAll(); render();
+}
+async function deleteEvent(id){ await sb.from("events").delete().eq("id",id); await loadAll(); render(); }
+async function updateEvent(id,data){ await sb.from("events").update(data).eq("id",id); await loadAll(); render(); }
+
+async function addExpense(f){
+  await sb.from("expenses").insert({date:f.date,description:f.desc,amount:f.amount,cat:f.cat,paid_by:f.paidBy,split:f.split,status:f.status,note:f.note,created_by:STATE.user?.role});
+  await loadAll(); render();
+}
+async function deleteExpense(id){ await sb.from("expenses").delete().eq("id",id); await loadAll(); render(); }
+async function toggleExpense(id){
+  const e=STATE.expenses.find(x=>x.id===id);
+  const newStatus=e.status==="pendiente"?"liquidado":"pendiente";
+  await sb.from("expenses").update({status:newStatus,liquidated_at:newStatus==="liquidado"?new Date().toISOString():null}).eq("id",id);
+  await loadAll(); render();
+}
+
+async function addAgreement(f){
+  await sb.from("agreements").insert({date:f.date,title:f.title,detail:f.detail,category:f.category,status:"activo",created_by:STATE.user?.role});
+  await loadAll(); render();
+}
+async function deleteAgreement(id){ await sb.from("agreements").delete().eq("id",id); await loadAll(); render(); }
+async function toggleAgreement(id){
+  const a=STATE.agreements.find(x=>x.id===id);
+  await sb.from("agreements").update({status:a.status==="activo"?"archivado":"activo"}).eq("id",id);
+  await loadAll(); render();
+}
+
+async function sendMessage(text,from){
+  await sb.from("messages").insert({from_user:from,text});
+  await loadAll(); render();
+}
+
+async function addWish(f){
+  await sb.from("wishlist").insert({item:f.item,priority:f.priority,requested_by:f.requestedBy,done:false});
+  await loadAll(); render();
+}
+async function deleteWish(id){ await sb.from("wishlist").delete().eq("id",id); await loadAll(); render(); }
+async function toggleWish(id){
+  const w=STATE.wishlist.find(x=>x.id===id);
+  await sb.from("wishlist").update({done:!w.done}).eq("id",id);
+  await loadAll(); render();
+}
+
+async function saveChild(data){
+  await sb.from("child_profile").update(data).eq("id",STATE.child.id);
+  await loadAll(); render();
+}
+
+// ── PDF Export ────────────────────────────────────────────────────────────────
+function exportPDF(){
+  const {expenses,events,agreements,child}=STATE;
+  const pending=expenses.filter(e=>e.status==="pendiente");
+  const total=expenses.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  const pendingTotal=pending.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  const cd={J:0,E:0,ambos:0};
+  events.forEach(ev=>{let d=new Date(ev.from+"T12:00:00"),end=new Date(ev.to+"T12:00:00");while(d<=end){cd[ev.who]=(cd[ev.who]||0)+1;d.setDate(d.getDate()+1);}});
+  const td=cd.J+cd.E+cd.ambos;
+  const now=new Date().toLocaleDateString("es-ES");
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Informe Coparentalidad</title>
+<style>body{font-family:Arial,sans-serif;font-size:12px;color:#1e293b;margin:30px;line-height:1.5}
+h1{font-size:20px}h2{font-size:14px;margin:20px 0 8px;border-bottom:1px solid #e2e8f0;padding-bottom:4px;color:#2563eb}
+table{width:100%;border-collapse:collapse;margin-bottom:12px}th{background:#f8fafc;text-align:left;padding:6px 8px;font-size:11px;border:1px solid #e2e8f0}
+td{padding:6px 8px;border:1px solid #e2e8f0;font-size:11px}.meta{color:#64748b;font-size:11px;margin-bottom:20px}
+.footer{margin-top:30px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8}</style></head>
+<body><h1>🤝 Informe de Coparentalidad</h1>
+<div class="meta">Generado el ${now} · Jorge · Eva · ${child.name||"Menor"}</div>
+<h2>Resumen</h2>
+<table><tr><th>Gastos registrados</th><th>Total</th><th>Pendiente</th><th>Días custodia</th></tr>
+<tr><td>${expenses.length}</td><td>${fmtMoney(total)}</td><td>${fmtMoney(pendingTotal)}</td><td>${td}</td></tr></table>
+${td>0?`<h2>Custodia</h2><table><tr><th>Jorge</th><th>Eva</th><th>Ambos</th></tr><tr><td>${cd.J}d (${td?Math.round(cd.J/td*100):0}%)</td><td>${cd.E}d (${td?Math.round(cd.E/td*100):0}%)</td><td>${cd.ambos}d</td></tr></table>`:""}
+${pending.length>0?`<h2>Gastos pendientes</h2><table><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Importe</th><th>Paga</th></tr>
+${pending.map(e=>`<tr><td>${fmt(e.date)}</td><td>${e.desc}</td><td>${e.cat}</td><td>${fmtMoney(e.amount)}</td><td>${e.paidBy==="J"?"Jorge":"Eva"}</td></tr>`).join("")}</table>`:""}
+${agreements.filter(a=>a.status==="activo").length>0?`<h2>Acuerdos activos</h2><table><tr><th>Fecha</th><th>Categoría</th><th>Acuerdo</th></tr>
+${agreements.filter(a=>a.status==="activo").map(a=>`<tr><td>${fmt(a.date)}</td><td>${a.category}</td><td>${a.title}</td></tr>`).join("")}</table>`:""}
+<div class="footer">Documento de registro privado. Para uso con validez legal contactar con mediador o abogado de familia.</div>
+</body></html>`;
+  const w=window.open("","_blank");w.document.write(html);w.document.close();setTimeout(()=>w.print(),500);
+}
+
+// ── UI Forms state (local) ────────────────────────────────────────────────────
+let UI = {
+  calYear: new Date().getFullYear(), calMonth: new Date().getMonth(),
+  calSelected: null,
+  showEventForm: false, eventForm: {from:today(),to:today(),who:"J",note:"",changeRequest:false},
+  expFilter: "todos", expCatFilter: "todas",
+  showExpForm: false, expForm: {date:today(),desc:"",amount:"",cat:"Médico",paidBy:"J",split:"50-50",status:"pendiente",note:""},
+  showAgForm: false, agForm: {date:today(),title:"",detail:"",category:"General"},
+  agSubTab: 0,
+  msgText: "", msgFrom: null,
+  showWishForm: false, wishForm: {item:"",priority:"normal",requestedBy:"J"},
+  childEditing: false, childDraft: {},
+  loginName: "", loginRole: "J",
+};
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render(){
+  const app=document.getElementById("app");
+  app.innerHTML="";
+  if(!STATE.user){ app.appendChild(renderLogin()); return; }
+  app.appendChild(renderApp());
+}
+
+function renderLogin(){
+  const wrap=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",background:"#f8fafc"}});
+  const box=el("div",{style:{background:"#fff",borderRadius:16,border:"1px solid #e2e8f0",padding:32,width:320,boxShadow:"0 4px 24px #0001"}});
+  const title=el("div",{style:{fontWeight:700,fontSize:20,marginBottom:4}},"🤝 Coparentalidad");
+  const sub=el("div",{style:{color:"#64748b",fontSize:13,marginBottom:24}},"Jorge · Eva · Martina");
+  const lbl1=el("label",{style:{display:"block",fontSize:12,fontWeight:600,color:"#64748b",marginBottom:6}},"¿Quién eres?");
+  const roleWrap=el("div",{style:{display:"flex",gap:10,marginBottom:20}});
+  ["J","E"].forEach(r=>{
+    const btn=el("button",{
+      style:{flex:1,padding:"12px",borderRadius:10,border:"2px solid",borderColor:UI.loginRole===r?"#2563eb":"#e2e8f0",background:UI.loginRole===r?"#eff6ff":"#fff",color:UI.loginRole===r?"#2563eb":"#64748b",fontWeight:700,fontSize:15},
+      onClick:()=>{UI.loginRole=r;render();}
+    }, r==="J"?"👨 Jorge":"👩 Eva");
+    roleWrap.appendChild(btn);
+  });
+  const enterBtn=el("button",{
+    style:{width:"100%",padding:"12px",background:"#2563eb",color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:15},
+    onClick:()=>{ STATE.user={role:UI.loginRole,name:UI.loginRole==="J"?"Jorge":"Eva"}; UI.msgFrom=UI.loginRole; render(); subscribeRealtime(); }
+  },"Entrar");
+  box.append(title,sub,lbl1,roleWrap,enterBtn);
+  wrap.appendChild(box);
+  return wrap;
+}
+
+function renderApp(){
+  const {expenses,events,agreements,messages,child}=STATE;
+  const pending=expenses.filter(e=>e.status==="pendiente");
+  let deudaText="";
+  const bal={J:0,E:0};
+  pending.forEach(e=>{
+    const a=parseFloat(e.amount||0);
+    if(e.split==="50-50"){const h=a/2;if(e.paidBy==="J")bal.E+=h;else bal.J+=h;}
+    else if(e.split==="100% Jorge"){if(e.paidBy==="E")bal.J+=a;}
+    else if(e.split==="100% Eva"){if(e.paidBy==="J")bal.E+=a;}
+  });
+  const diff=bal.E-bal.J;
+  if(diff!==0) deudaText=diff>0?`Eva debe ${fmtMoney(diff)}`:`Jorge debe ${fmtMoney(Math.abs(diff))}`;
+
+  // Alerts
+  const alerts=[];
+  expenses.filter(e=>e.status==="pendiente").forEach(e=>{
+    const age=Math.round((Date.now()-new Date(e.date+"T12:00:00"))/86400000);
+    if(age>=14) alerts.push(`"${e.desc}" lleva ${age} días pendiente`);
+  });
+  events.forEach(ev=>{
+    const d=daysUntil(ev.from);
+    if(d>=0&&d<=3) alerts.push(`Custodia ${ev.who==="J"?"Jorge":ev.who==="E"?"Eva":"ambos"} ${d===0?"hoy":`en ${d}d`}`);
+  });
+  events.filter(ev=>ev.changeStatus==="pendiente").forEach(()=>alerts.push("Solicitud de cambio pendiente"));
+
+  const TABS=["📅 Custodia","💶 Gastos","👤 Ficha","📝 Acuerdos","📊 Resumen"];
+
+  const wrap=el("div",{style:{minHeight:"100vh",background:"#f8fafc"}});
+
+  // Header
+  const hdr=el("div",{style:{background:"#1e293b",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}});
+  const hdrL=el("div",{style:{display:"flex",alignItems:"center",gap:10}});
+  hdrL.append(el("span",{},"🤝"),el("div",{}));
+  hdrL.children[1].append(
+    el("div",{style:{color:"#f1f5f9",fontWeight:700,fontSize:15}},"Coparentalidad"),
+    el("div",{style:{color:"#64748b",fontSize:11}},`${STATE.user.name} · ${child.name||"Martina"}`)
+  );
+  const hdrR=el("div",{style:{display:"flex",alignItems:"center",gap:8}});
+  if(deudaText) hdrR.appendChild(el("div",{style:{background:"#d97706",color:"#fff",borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700}},deudaText));
+  hdrR.appendChild(el("button",{style:{background:"#334155",color:"#cbd5e1",border:"none",borderRadius:8,padding:"6px 10px",fontSize:11,fontWeight:600},onClick:exportPDF},"📄 PDF"));
+  hdrR.appendChild(el("button",{style:{background:"#334155",color:"#94a3b8",border:"none",borderRadius:8,padding:"6px 10px",fontSize:11},onClick:()=>{STATE.user=null;realtimeSubs.forEach(s=>sb.removeChannel(s));render();}},"Salir"));
+  hdr.append(hdrL,hdrR);
+
+  // Alerts
+  let alertBanner=null;
+  if(alerts.length>0){
+    alertBanner=el("div",{style:{background:"#fef3c7",borderBottom:"1px solid #fde68a",padding:"7px 16px",display:"flex",gap:8,overflowX:"auto",alignItems:"center"}});
+    alertBanner.appendChild(el("span",{style:{fontSize:13,flexShrink:0}},"⚠️"));
+    const aw=el("div",{style:{display:"flex",gap:8,overflowX:"auto"}});
+    alerts.slice(0,4).forEach(a=>{
+      aw.appendChild(el("span",{style:{fontSize:11,color:"#78350f",whiteSpace:"nowrap",background:"#fde68a",borderRadius:6,padding:"2px 8px"}},a));
+    });
+    alertBanner.appendChild(aw);
+  }
+
+  // Tabs
+  const tabBar=el("div",{style:{display:"flex",background:"#fff",borderBottom:"1px solid #e2e8f0",overflowX:"auto"}});
+  TABS.forEach((t,i)=>{
+    tabBar.appendChild(el("button",{
+      style:{padding:"10px 13px",border:"none",background:"none",fontWeight:STATE.tab===i?700:400,color:STATE.tab===i?"#2563eb":"#64748b",borderBottom:STATE.tab===i?"2px solid #2563eb":"2px solid transparent",whiteSpace:"nowrap",fontSize:12},
+      onClick:()=>{STATE.tab=i;render();}
+    },t));
+  });
+
+  // Content
+  const content=el("div",{style:{padding:"14px",maxWidth:700,margin:"0 auto"}});
+  if(STATE.tab===0) content.appendChild(renderCustodia());
+  if(STATE.tab===1) content.appendChild(renderGastos());
+  if(STATE.tab===2) content.appendChild(renderFicha());
+  if(STATE.tab===3) content.appendChild(renderAcuerdos());
+  if(STATE.tab===4) content.appendChild(renderResumen(diff));
+
+  wrap.append(hdr);
+  if(alertBanner) wrap.append(alertBanner);
+  wrap.append(tabBar,content);
+  return wrap;
+}
+
+// ── CUSTODIA ──────────────────────────────────────────────────────────────────
+function renderCustodia(){
+  const {events}=STATE;
+  const wrap=el("div",{});
+  const dayMap={};
+  events.forEach(ev=>{let d=new Date(ev.from+"T12:00:00"),end=new Date(ev.to+"T12:00:00");while(d<=end){dayMap[d.toISOString().slice(0,10)]=ev;d.setDate(d.getDate()+1);}});
+  const firstDay=new Date(UI.calYear,UI.calMonth,1).getDay();
+  const dim=new Date(UI.calYear,UI.calMonth+1,0).getDate();
+  const offset=(firstDay+6)%7;
+
+  // Nav
+  const nav=el("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}});
+  nav.append(
+    el("button",{style:btnSmSt,onClick:()=>{if(UI.calMonth===0){UI.calMonth=11;UI.calYear--;}else UI.calMonth--;render();}},"←"),
+    el("span",{style:{fontWeight:700,fontSize:15}},`${MONTHS[UI.calMonth]} ${UI.calYear}`),
+    el("button",{style:btnSmSt,onClick:()=>{if(UI.calMonth===11){UI.calMonth=0;UI.calYear++;}else UI.calMonth++;render();}},"→")
+  );
+
+  // Legend
+  const leg=el("div",{style:{display:"flex",gap:12,marginBottom:10,flexWrap:"wrap"}});
+  [["J","Jorge"],["E","Eva"],["ambos","Ambos"]].forEach(([k,l])=>{
+    const d=el("div",{style:{display:"flex",alignItems:"center",gap:5,fontSize:12}});
+    d.append(el("div",{style:{width:10,height:10,borderRadius:3,background:CUSTODY_COLORS[k]}}),document.createTextNode(l));
+    leg.appendChild(d);
+  });
+
+  // Calendar
+  const cal=el("div",{style:{background:"#fff",borderRadius:12,border:"1px solid #e2e8f0",overflow:"hidden",marginBottom:14}});
+  const dayHdr=el("div",{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",background:"#f8fafc"}});
+  ["L","M","X","J","V","S","D"].forEach(d=>dayHdr.appendChild(el("div",{style:{textAlign:"center",padding:"7px 4px",fontSize:11,fontWeight:600,color:"#94a3b8"}},d)));
+  const grid=el("div",{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}});
+  for(let i=0;i<offset;i++) grid.appendChild(el("div",{}));
+  for(let n=1;n<=dim;n++){
+    const key=`${UI.calYear}-${String(UI.calMonth+1).padStart(2,"0")}-${String(n).padStart(2,"0")}`;
+    const ev=dayMap[key];
+    const isToday=key===today();
+    const isPending=ev&&ev.changeStatus==="pendiente";
+    const cell=el("div",{
+      style:{padding:"5px 3px",minHeight:34,textAlign:"center",cursor:ev?"pointer":"default",background:ev&&!isPending?CUSTODY_COLORS[ev.who]+"22":"transparent",borderTop:"1px solid #f1f5f9"},
+      onClick:()=>{if(ev){UI.calSelected=ev;render();}}
+    });
+    const num=el("div",{style:{width:22,height:22,borderRadius:"50%",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:isToday?700:400,background:isToday?"#2563eb":ev&&!isPending?CUSTODY_COLORS[ev.who]+"44":"transparent",color:isToday?"#fff":ev&&!isPending?CUSTODY_COLORS[ev.who]:"#1e293b",border:isPending?"1px dashed #94a3b8":"none"}},String(n));
+    cell.appendChild(num);
+    grid.appendChild(cell);
+  }
+  cal.append(dayHdr,grid);
+
+  // Selected
+  let selEl=null;
+  if(UI.calSelected){
+    const s=UI.calSelected;
+    selEl=el("div",{style:{...cardSt,marginBottom:14,borderLeft:`3px solid ${CUSTODY_COLORS[s.who]}`}});
+    const sTop=el("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"start"}});
+    const sInfo=el("div",{});
+    sInfo.append(
+      el("div",{style:{fontWeight:700,fontSize:13,color:CUSTODY_COLORS[s.who],marginBottom:3}},`${s.who==="J"?"Jorge":s.who==="E"?"Eva":"Ambos"}: ${fmt(s.from)} → ${fmt(s.to)} · ${daysBetween(s.from,s.to)}d`),
+    );
+    if(s.note) sInfo.appendChild(el("div",{style:{fontSize:12,color:"#64748b",marginBottom:4}},s.note));
+    if(s.changeStatus==="pendiente"){
+      sInfo.appendChild(el("div",{style:{background:"#fef3c7",borderRadius:6,padding:"4px 8px",fontSize:11,color:"#78350f",marginBottom:6}},"⏳ Solicitud pendiente de confirmar"));
+    }
+    const sBtns=el("div",{style:{display:"flex",gap:5,flexShrink:0}});
+    if(s.changeStatus==="pendiente"){
+      sBtns.appendChild(el("button",{style:{background:"#dcfce7",color:"#166534",border:"none",borderRadius:7,padding:"5px 8px",fontSize:11},onClick:()=>{updateEvent(s.id,{change_status:"confirmado"}).then(()=>UI.calSelected=null);}},`✓ Confirmar`));
+      sBtns.appendChild(el("button",{style:{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:7,padding:"5px 8px",fontSize:11},onClick:()=>{deleteEvent(s.id).then(()=>UI.calSelected=null);}},`✗ Rechazar`));
+    }
+    sBtns.appendChild(el("button",{style:{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:7,padding:"5px 8px",fontSize:11},onClick:()=>{deleteEvent(s.id).then(()=>UI.calSelected=null);}},`Borrar`));
+    sTop.append(sInfo,sBtns);
+    selEl.appendChild(sTop);
+  }
+
+  // Add button
+  const addBtn=el("button",{style:{...btnPrimarySt,width:"100%",marginBottom:10},onClick:()=>{UI.showEventForm=!UI.showEventForm;render();}},UI.showEventForm?"Cancelar":"+ Añadir periodo");
+
+  // Form
+  let formEl=null;
+  if(UI.showEventForm){
+    formEl=el("div",{style:{...cardSt,marginBottom:14}});
+    const f=UI.eventForm;
+    const row=el("div",{style:{display:"flex",gap:10,marginBottom:10}});
+    const fd=el("div",{style:{flex:1}});fd.append(el("label",{style:lblSt},"Desde"),inputEl("date",f.from,v=>UI.eventForm.from=v));
+    const td2=el("div",{style:{flex:1}});td2.append(el("label",{style:lblSt},"Hasta"),inputEl("date",f.to,v=>UI.eventForm.to=v));
+    row.append(fd,td2);
+    const whoRow=el("div",{style:{marginBottom:10}});
+    whoRow.appendChild(el("label",{style:lblSt},"Con quién"));
+    const whoD=el("div",{style:{display:"flex",gap:8}});
+    [["J","Jorge"],["E","Eva"],["ambos","Ambos"]].forEach(([k,l])=>{
+      whoD.appendChild(el("button",{style:{flex:1,padding:"8px",borderRadius:8,border:"1px solid",borderColor:f.who===k?CUSTODY_COLORS[k]:"#e2e8f0",background:f.who===k?CUSTODY_COLORS[k]+"22":"#fff",color:f.who===k?CUSTODY_COLORS[k]:"#64748b",fontWeight:f.who===k?700:400,fontSize:12},onClick:()=>{UI.eventForm.who=k;render();}},l));
+    });
+    whoRow.appendChild(whoD);
+    const noteRow=el("div",{style:{marginBottom:10}});
+    noteRow.append(el("label",{style:lblSt},"Nota"),inputEl("text",f.note,v=>UI.eventForm.note=v,"Ej: Vacaciones"));
+    const chkRow=el("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:12}});
+    const chk=el("input",{type:"checkbox"});chk.checked=f.changeRequest;chk.addEventListener("change",e=>{UI.eventForm.changeRequest=e.target.checked;});
+    chkRow.append(chk,el("label",{style:{fontSize:12,color:"#64748b"}},"Marcar como solicitud de cambio (pendiente de confirmar)"));
+    const saveBtn=el("button",{style:{...btnPrimarySt,width:"100%"},onClick:async()=>{
+      await addEvent({...UI.eventForm,changeStatus:UI.eventForm.changeRequest?"pendiente":"confirmado"});
+      UI.showEventForm=false;UI.eventForm={from:today(),to:today(),who:"J",note:"",changeRequest:false};
+    }},"Guardar");
+    formEl.append(row,whoRow,noteRow,chkRow,saveBtn);
+  }
+
+  // Upcoming
+  const upcoming=el("div",{style:{marginTop:14}});
+  const futureEvs=[...events].filter(ev=>ev.to>=today()).sort((a,b)=>a.from.localeCompare(b.from)).slice(0,5);
+  if(futureEvs.length>0){
+    upcoming.appendChild(el("div",{style:{fontSize:11,fontWeight:600,color:"#94a3b8",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}},"Próximos"));
+    futureEvs.forEach(ev=>{
+      const c=CUSTODY_COLORS[ev.who];
+      const row=el("div",{style:{...cardSt,marginBottom:8,cursor:"pointer",borderLeft:`3px solid ${ev.changeStatus==="pendiente"?"#94a3b8":c}`},onClick:()=>{UI.calSelected=ev;render();}});
+      const t=el("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}});
+      t.append(
+        el("span",{style:{fontWeight:600,fontSize:13,color:ev.changeStatus==="pendiente"?"#64748b":c}},`${ev.who==="J"?"Jorge":ev.who==="E"?"Eva":"Ambos"}${ev.changeStatus==="pendiente"?" (pendiente)":""}`),
+        el("span",{style:{fontSize:11,color:"#94a3b8"}},`${fmt(ev.from)} → ${fmt(ev.to)}`)
+      );
+      row.appendChild(t);
+      if(ev.note) row.appendChild(el("div",{style:{fontSize:11,color:"#94a3b8",marginTop:2}},ev.note));
+      upcoming.appendChild(row);
+    });
+  }
+
+  wrap.append(nav,leg,cal);
+  if(selEl) wrap.appendChild(selEl);
+  wrap.append(addBtn);
+  if(formEl) wrap.appendChild(formEl);
+  wrap.appendChild(upcoming);
+  return wrap;
+}
+
+// ── GASTOS ────────────────────────────────────────────────────────────────────
+function renderGastos(){
+  const {expenses}=STATE;
+  const wrap=el("div",{});
+  const pending=expenses.filter(e=>e.status==="pendiente");
+  const bal={J:0,E:0};
+  pending.forEach(e=>{const a=parseFloat(e.amount||0);if(e.split==="50-50"){const h=a/2;if(e.paidBy==="J")bal.E+=h;else bal.J+=h;}else if(e.split==="100% Jorge"){if(e.paidBy==="E")bal.J+=a;}else if(e.split==="100% Eva"){if(e.paidBy==="J")bal.E+=a;}});
+  const diff=bal.E-bal.J;
+
+  if(pending.length>0){
+    const balCard=el("div",{style:{...cardSt,background:"#1e293b",color:"#f1f5f9",marginBottom:14}});
+    balCard.append(
+      el("div",{style:{fontSize:11,color:"#94a3b8",marginBottom:5,textTransform:"uppercase",letterSpacing:0.5}},"Saldo pendiente"),
+      el("div",{style:{fontSize:19,fontWeight:700,marginBottom:3}},diff===0?"Al día ✓":diff>0?`Eva debe ${fmtMoney(Math.abs(diff))}`:`Jorge debe ${fmtMoney(Math.abs(diff))}`),
+      el("div",{style:{fontSize:11,color:"#94a3b8"}},`${pending.length} gastos · Total: ${fmtMoney(pending.reduce((s,e)=>s+parseFloat(e.amount||0),0))}`)
+    );
+    wrap.appendChild(balCard);
+  }
+
+  // Filters
+  const filRow=el("div",{style:{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}});
+  [["todos","Todos"],["pendiente","Pendientes"],["liquidado","Liquidados"]].forEach(([k,l])=>{
+    filRow.appendChild(el("button",{style:{padding:"5px 10px",borderRadius:20,border:"1px solid",borderColor:UI.expFilter===k?"#2563eb":"#e2e8f0",background:UI.expFilter===k?"#2563eb":"#fff",color:UI.expFilter===k?"#fff":"#64748b",fontSize:11,fontWeight:UI.expFilter===k?600:400},onClick:()=>{UI.expFilter=k;render();}},l));
+  });
+  const catSel=el("select",{style:{...inputSt,width:"auto",padding:"4px 8px",fontSize:11}});
+  el("option",{value:"todas"},"Todas las categorías"); catSel.appendChild(el("option",{value:"todas"},"Todas las categorías"));
+  EXPENSE_CATS.forEach(c=>catSel.appendChild(el("option",{value:c},c)));
+  catSel.value=UI.expCatFilter;
+  catSel.addEventListener("change",e=>{UI.expCatFilter=e.target.value;render();});
+  filRow.appendChild(catSel);
+  wrap.appendChild(filRow);
+
+  // List
+  let filtered=UI.expFilter==="todos"?expenses:expenses.filter(e=>e.status===UI.expFilter);
+  if(UI.expCatFilter!=="todas") filtered=filtered.filter(e=>e.cat===UI.expCatFilter);
+  filtered=[...filtered].sort((a,b)=>b.date.localeCompare(a.date));
+
+  if(filtered.length===0) wrap.appendChild(el("div",{style:{textAlign:"center",color:"#94a3b8",padding:"24px 0",fontSize:13}},"Sin gastos"));
+
+  filtered.forEach(e=>{
+    const age=Math.round((Date.now()-new Date(e.date+"T12:00:00"))/86400000);
+    const row=el("div",{style:{...cardSt,marginBottom:10,opacity:e.status==="liquidado"?0.65:1}});
+    const top=el("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"start"}});
+    const info=el("div",{style:{flex:1,minWidth:0}});
+    const tags=el("div",{style:{display:"flex",gap:6,marginBottom:4,flexWrap:"wrap",alignItems:"center"}});
+    tags.appendChild(el("span",{style:{fontSize:10,background:"#f1f5f9",borderRadius:5,padding:"2px 6px",color:"#64748b"}},e.cat));
+    tags.appendChild(el("span",{style:{fontSize:10,color:"#94a3b8"}},fmt(e.date)));
+    if(e.status==="pendiente"&&age>=14) tags.appendChild(el("span",{style:{fontSize:10,background:"#fee2e2",color:"#dc2626",borderRadius:5,padding:"2px 6px"}},`⚠ ${age}d pendiente`));
+    info.append(tags,el("div",{style:{fontWeight:600,fontSize:13,marginBottom:2}},e.desc),el("div",{style:{fontSize:12,color:"#64748b"}},`${fmtMoney(e.amount)} · Paga ${e.paidBy==="J"?"Jorge":"Eva"} · ${e.split}`));
+    if(e.note) info.appendChild(el("div",{style:{fontSize:11,color:"#94a3b8",fontStyle:"italic",marginTop:2}},e.note));
+    const btns=el("div",{style:{display:"flex",flexDirection:"column",gap:5,marginLeft:8}});
+    btns.append(
+      el("button",{style:{fontSize:10,padding:"3px 7px",borderRadius:6,border:"none",background:e.status==="pendiente"?"#fef9c3":"#dcfce7",color:e.status==="pendiente"?"#854d0e":"#166534"},onClick:()=>toggleExpense(e.id)},e.status==="pendiente"?"Pendiente":"Liquidado"),
+      el("button",{style:{fontSize:10,padding:"3px 7px",borderRadius:6,border:"none",background:"#fee2e2",color:"#dc2626"},onClick:()=>deleteExpense(e.id)},"✕")
+    );
+    top.append(info,btns);
+    row.appendChild(top);
+    wrap.appendChild(row);
+  });
+
+  wrap.appendChild(el("button",{style:{...btnPrimarySt,width:"100%",marginTop:6},onClick:()=>{UI.showExpForm=!UI.showExpForm;render();}},UI.showExpForm?"Cancelar":"+ Añadir gasto"));
+
+  if(UI.showExpForm){
+    const f=UI.expForm;
+    const form=el("div",{style:{...cardSt,marginTop:10}});
+    const r1=el("div",{style:{display:"flex",gap:10,marginBottom:10}});
+    const fd=el("div",{style:{flex:1}});fd.append(el("label",{style:lblSt},"Fecha"),inputEl("date",f.date,v=>UI.expForm.date=v));
+    const fa=el("div",{style:{flex:1}});fa.append(el("label",{style:lblSt},"Importe (€)"),inputEl("number",f.amount,v=>UI.expForm.amount=v,"0.00"));
+    r1.append(fd,fa);
+    const descRow=el("div",{style:{marginBottom:10}});descRow.append(el("label",{style:lblSt},"Descripción"),inputEl("text",f.desc,v=>UI.expForm.desc=v,"Ej: Ortodoncia Martina"));
+    const r2=el("div",{style:{display:"flex",gap:10,marginBottom:10}});
+    const fc=el("div",{style:{flex:1}});fc.append(el("label",{style:lblSt},"Categoría"),selectEl(EXPENSE_CATS,f.cat,v=>UI.expForm.cat=v));
+    const fp=el("div",{style:{flex:1}});fp.append(el("label",{style:lblSt},"Paga"),selectEl(["Jorge","Eva"],f.paidBy==="J"?"Jorge":"Eva",v=>UI.expForm.paidBy=v==="Jorge"?"J":"E"));
+    r2.append(fc,fp);
+    const splitRow=el("div",{style:{marginBottom:10}});
+    splitRow.appendChild(el("label",{style:lblSt},"Reparto"));
+    const splitD=el("div",{style:{display:"flex",gap:6}});
+    ["50-50","100% Jorge","100% Eva"].forEach(s=>{
+      splitD.appendChild(el("button",{style:{flex:1,padding:"7px",borderRadius:8,border:"1px solid",borderColor:f.split===s?"#2563eb":"#e2e8f0",background:f.split===s?"#eff6ff":"#fff",color:f.split===s?"#2563eb":"#64748b",fontSize:10,fontWeight:f.split===s?700:400},onClick:()=>{UI.expForm.split=s;render();}},s));
+    });
+    splitRow.appendChild(splitD);
+    const noteRow2=el("div",{style:{marginBottom:12}});noteRow2.append(el("label",{style:lblSt},"Nota"),inputEl("text",f.note,v=>UI.expForm.note=v,"Contexto adicional..."));
+    form.append(r1,descRow,r2,splitRow,noteRow2,el("button",{style:{...btnPrimarySt,width:"100%"},onClick:async()=>{
+      if(!f.desc||!f.amount) return;
+      await addExpense(f);
+      UI.showExpForm=false;UI.expForm={date:today(),desc:"",amount:"",cat:"Médico",paidBy:"J",split:"50-50",status:"pendiente",note:""};
+    }},"Guardar gasto"));
+    wrap.appendChild(form);
+  }
+  return wrap;
+}
+
+// ── FICHA ─────────────────────────────────────────────────────────────────────
+function renderFicha(){
+  const {child,wishlist}=STATE;
+  const wrap=el("div",{});
+  const fields=[["dob","Fecha nacimiento","date"],["school","Colegio","text"],["doctor","Médico","text"],["ss","Nº SS","text"],["allergies","Alergias","text"],["size_clothes","Talla ropa","text"],["size_shoes","Talla zapatos","text"],["tutor1","Tutor 1","text"],["tutor2","Tutor 2","text"]];
+
+  const card1=el("div",{style:{...cardSt,marginBottom:14}});
+  const cardHdr=el("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}});
+  const avatar=el("div",{style:{display:"flex",alignItems:"center",gap:10}});
+  avatar.append(el("div",{style:{width:38,height:38,borderRadius:"50%",background:"#eff6ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}},"👧"));
+  const avatarInfo=el("div",{});
+  avatarInfo.appendChild(el("div",{style:{fontWeight:700,fontSize:15}},child.name||"Menor"));
+  if(child.dob) avatarInfo.appendChild(el("div",{style:{fontSize:12,color:"#64748b"}},`Nacida el ${fmt(child.dob)} · ${Math.floor((Date.now()-new Date(child.dob+"T12:00:00"))/31536000000)} años`));
+  avatar.appendChild(avatarInfo);
+  const editBtn=el("button",{style:{background:"#f1f5f9",border:"none",borderRadius:8,padding:"6px 10px",fontSize:12,color:"#64748b"},onClick:()=>{UI.childEditing=!UI.childEditing;UI.childDraft={...child};render();}},UI.childEditing?"Cancelar":"✏️ Editar");
+  cardHdr.append(avatar,editBtn);
+  card1.appendChild(cardHdr);
+
+  if(UI.childEditing){
+    const nameRow=el("div",{style:{marginBottom:10}});nameRow.append(el("label",{style:lblSt},"Nombre"),inputEl("text",UI.childDraft.name||"",v=>UI.childDraft.name=v,"Nombre"));
+    card1.appendChild(nameRow);
+    fields.forEach(([k,label,type])=>{
+      const r=el("div",{style:{marginBottom:10}});r.append(el("label",{style:lblSt},label),inputEl(type,UI.childDraft[k]||"",v=>UI.childDraft[k]=v,label));
+      card1.appendChild(r);
+    });
+    const notesRow=el("div",{style:{marginBottom:12}});
+    notesRow.appendChild(el("label",{style:lblSt},"Notas"));
+    const ta=el("textarea",{style:{...inputSt,minHeight:60,resize:"vertical"}});ta.value=UI.childDraft.notes||"";ta.addEventListener("input",e=>UI.childDraft.notes=e.target.value);
+    notesRow.appendChild(ta);card1.appendChild(notesRow);
+    card1.appendChild(el("button",{style:{...btnPrimarySt,width:"100%"},onClick:async()=>{await saveChild(UI.childDraft);UI.childEditing=false;}},"Guardar ficha"));
+  } else {
+    const hasData=fields.some(([k])=>child[k]);
+    if(!hasData) card1.appendChild(el("div",{style:{textAlign:"center",color:"#94a3b8",padding:"12px 0",fontSize:13}},"Pulsa Editar para añadir información"));
+    fields.filter(([k])=>child[k]).forEach(([k,label])=>{
+      const r=el("div",{style:{display:"flex",padding:"6px 0",borderBottom:"1px solid #f1f5f9"}});
+      r.append(el("div",{style:{width:130,fontSize:12,color:"#64748b",flexShrink:0}},label),el("div",{style:{fontSize:13,fontWeight:500}},k==="dob"?fmt(child[k]):child[k]));
+      card1.appendChild(r);
+    });
+    if(child.notes) card1.appendChild(el("div",{style:{marginTop:10,padding:"8px 10px",background:"#f8fafc",borderRadius:8,fontSize:12,color:"#64748b"}},child.notes));
+  }
+  wrap.appendChild(card1);
+
+  // Wishlist
+  const wCard=el("div",{style:cardSt});
+  const wHdr=el("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}});
+  wHdr.append(el("div",{style:{fontWeight:600,fontSize:14}},"🎁 Lista de deseos"),el("button",{style:{background:"#eff6ff",border:"none",borderRadius:8,padding:"5px 10px",fontSize:11,color:"#2563eb",fontWeight:600},onClick:()=>{UI.showWishForm=!UI.showWishForm;render();}},UI.showWishForm?"Cancelar":"+ Añadir"));
+  wCard.appendChild(wHdr);
+
+  if(UI.showWishForm){
+    const wf=UI.wishForm;
+    const wForm=el("div",{style:{background:"#f8fafc",borderRadius:10,padding:12,marginBottom:12}});
+    const wr1=el("div",{style:{marginBottom:8}});wr1.append(el("label",{style:lblSt},"Artículo"),inputEl("text",wf.item,v=>UI.wishForm.item=v,"Ej: Zapatillas talla 36"));
+    const wr2=el("div",{style:{display:"flex",gap:10,marginBottom:8}});
+    const wp=el("div",{style:{flex:1}});wp.append(el("label",{style:lblSt},"Prioridad"),selectEl(["alta","normal","baja"],wf.priority,v=>UI.wishForm.priority=v));
+    const wrb=el("div",{style:{flex:1}});wrb.append(el("label",{style:lblSt},"Propuesto por"),selectEl(["Jorge","Eva"],wf.requestedBy==="J"?"Jorge":"Eva",v=>UI.wishForm.requestedBy=v==="Jorge"?"J":"E"));
+    wr2.append(wp,wrb);
+    wForm.append(wr1,wr2,el("button",{style:{...btnPrimarySt,width:"100%"},onClick:async()=>{if(!UI.wishForm.item)return;await addWish(UI.wishForm);UI.showWishForm=false;UI.wishForm={item:"",priority:"normal",requestedBy:"J"};}},"Añadir"));
+    wCard.appendChild(wForm);
+  }
+
+  const priColors={alta:"#dc2626",normal:"#64748b",baja:"#166534"};
+  ["alta","normal","baja"].forEach(prio=>{
+    const items=wishlist.filter(w=>w.priority===prio);
+    if(!items.length) return;
+    wCard.appendChild(el("div",{style:{fontSize:10,fontWeight:600,color:priColors[prio],textTransform:"uppercase",letterSpacing:0.5,marginBottom:6,marginTop:8}},`Prioridad ${prio}`));
+    items.forEach(w=>{
+      const wr=el("div",{style:{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:"1px solid #f1f5f9",opacity:w.done?0.5:1}});
+      const chk=el("button",{style:{width:20,height:20,borderRadius:4,border:"1px solid",borderColor:w.done?"#059669":"#e2e8f0",background:w.done?"#059669":"#fff",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:10},onClick:()=>toggleWish(w.id)},w.done?"✓":"");
+      wr.append(chk,el("div",{style:{flex:1,fontSize:13,textDecoration:w.done?"line-through":"none"}},w.item),el("div",{style:{fontSize:10,color:"#94a3b8"}},w.requestedBy==="J"?"Jorge":"Eva"),el("button",{style:{fontSize:10,background:"none",border:"none",color:"#94a3b8"},onClick:()=>deleteWish(w.id)},"✕"));
+      wCard.appendChild(wr);
+    });
+  });
+  if(wishlist.length===0) wCard.appendChild(el("div",{style:{textAlign:"center",color:"#94a3b8",padding:"14px 0",fontSize:13}},"Sin artículos"));
+  wrap.appendChild(wCard);
+  return wrap;
+}
+
+// ── ACUERDOS ──────────────────────────────────────────────────────────────────
+function renderAcuerdos(){
+  const {agreements,messages}=STATE;
+  const wrap=el("div",{});
+  const stTabs=el("div",{style:{display:"flex",gap:8,marginBottom:14}});
+  ["📝 Acuerdos","💬 Registro"].forEach((l,i)=>{
+    stTabs.appendChild(el("button",{style:{flex:1,padding:"9px",border:"none",borderRadius:10,background:UI.agSubTab===i?"#2563eb":"#f1f5f9",color:UI.agSubTab===i?"#fff":"#64748b",fontWeight:600,fontSize:13},onClick:()=>{UI.agSubTab=i;render();}},l));
+  });
+  wrap.appendChild(stTabs);
+
+  if(UI.agSubTab===0){
+    const active=agreements.filter(a=>a.status==="activo");
+    const archived=agreements.filter(a=>a.status==="archivado");
+    wrap.appendChild(el("div",{style:{fontSize:12,color:"#64748b",marginBottom:10}},`${active.length} acuerdos activos`));
+    active.forEach(a=>{
+      const c=CAT_COLORS[a.category]||"#64748b";
+      const row=el("div",{style:{...cardSt,marginBottom:10,borderLeft:`3px solid ${c}`}});
+      const top=el("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"start"}});
+      const info=el("div",{style:{flex:1}});
+      const tags=el("div",{style:{display:"flex",gap:6,marginBottom:4,alignItems:"center"}});
+      tags.append(el("span",{style:{fontSize:10,fontWeight:600,color:c,background:c+"18",borderRadius:5,padding:"2px 7px"}},a.category),el("span",{style:{fontSize:10,color:"#94a3b8"}},fmt(a.date)));
+      info.append(tags,el("div",{style:{fontWeight:600,fontSize:13,marginBottom:a.detail?3:0}},a.title));
+      if(a.detail) info.appendChild(el("div",{style:{fontSize:12,color:"#64748b",lineHeight:1.5}},a.detail));
+      const btns=el("div",{style:{display:"flex",flexDirection:"column",gap:5,marginLeft:10}});
+      btns.append(el("button",{style:{fontSize:10,padding:"3px 7px",borderRadius:6,border:"none",background:"#f1f5f9",color:"#64748b"},onClick:()=>toggleAgreement(a.id)},"Archivar"),el("button",{style:{fontSize:10,padding:"3px 7px",borderRadius:6,border:"none",background:"#fee2e2",color:"#dc2626"},onClick:()=>deleteAgreement(a.id)},"✕"));
+      top.append(info,btns);row.appendChild(top);wrap.appendChild(row);
+    });
+    if(active.length===0&&!UI.showAgForm) wrap.appendChild(el("div",{style:{textAlign:"center",color:"#94a3b8",padding:"20px 0",fontSize:13}},"Sin acuerdos"));
+
+    wrap.appendChild(el("button",{style:{...btnPrimarySt,width:"100%",marginBottom:12},onClick:()=>{UI.showAgForm=!UI.showAgForm;render();}},UI.showAgForm?"Cancelar":"+ Registrar acuerdo"));
+
+    if(UI.showAgForm){
+      const f=UI.agForm;
+      const form=el("div",{style:cardSt});
+      const r1=el("div",{style:{display:"flex",gap:10,marginBottom:10}});
+      const fd=el("div",{style:{flex:1}});fd.append(el("label",{style:lblSt},"Fecha"),inputEl("date",f.date,v=>UI.agForm.date=v));
+      const fc=el("div",{style:{flex:1}});fc.append(el("label",{style:lblSt},"Categoría"),selectEl(["General","Custodia","Económico","Salud","Colegio","Vacaciones","Extraescolar"],f.category,v=>UI.agForm.category=v));
+      r1.append(fd,fc);
+      const tr=el("div",{style:{marginBottom:10}});tr.append(el("label",{style:lblSt},"Acuerdo"),inputEl("text",f.title,v=>UI.agForm.title=v,"Ej: Martina empieza natación los martes"));
+      const dr=el("div",{style:{marginBottom:12}});dr.appendChild(el("label",{style:lblSt},"Detalle"));
+      const ta=el("textarea",{style:{...inputSt,minHeight:60,resize:"vertical"}});ta.value=f.detail;ta.addEventListener("input",e=>UI.agForm.detail=e.target.value);
+      dr.appendChild(ta);
+      form.append(r1,tr,dr,el("button",{style:{...btnPrimarySt,width:"100%"},onClick:async()=>{if(!UI.agForm.title)return;await addAgreement(UI.agForm);UI.showAgForm=false;UI.agForm={date:today(),title:"",detail:"",category:"General"};}},"Guardar"));
+      wrap.appendChild(form);
+    }
+
+    if(archived.length>0){
+      wrap.appendChild(el("div",{style:{fontSize:11,fontWeight:600,color:"#94a3b8",marginTop:16,marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}},`Archivados (${archived.length})`));
+      archived.forEach(a=>{
+        const row=el("div",{style:{...cardSt,marginBottom:8,opacity:0.5}});
+        const top=el("div",{style:{display:"flex",justifyContent:"space-between"}});
+        const info=el("div",{});info.append(el("div",{style:{fontSize:10,color:"#94a3b8",marginBottom:2}},`${fmt(a.date)} · ${a.category}`),el("div",{style:{fontSize:13,fontWeight:600}},a.title));
+        top.append(info,el("button",{style:{fontSize:10,padding:"3px 7px",borderRadius:6,border:"none",background:"#f1f5f9",color:"#64748b",alignSelf:"start"},onClick:()=>toggleAgreement(a.id)},"Restaurar"));
+        row.appendChild(top);wrap.appendChild(row);
+      });
+    }
+  }
+
+  if(UI.agSubTab===1){
+    wrap.appendChild(el("div",{style:{background:"#f8fafc",borderRadius:10,padding:"7px 12px",marginBottom:12,fontSize:11,color:"#64748b"}},"📌 Registro con sello de tiempo. Los mensajes no se pueden editar una vez guardados."));
+    const msgBox=el("div",{style:{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,height:340,overflowY:"auto",padding:12,marginBottom:12},id:"msgBox"});
+    if(messages.length===0) msgBox.appendChild(el("div",{style:{textAlign:"center",color:"#94a3b8",padding:"60px 0",fontSize:13}},"Sin mensajes"));
+    messages.forEach(m=>{
+      const isMe=m.from===STATE.user?.role;
+      const mWrap=el("div",{style:{display:"flex",justifyContent:isMe?"flex-end":"flex-start",marginBottom:10}});
+      const mInner=el("div",{style:{maxWidth:"75%"}});
+      mInner.append(
+        el("div",{style:{background:isMe?"#2563eb":"#f1f5f9",color:isMe?"#fff":"#1e293b",borderRadius:isMe?"12px 12px 2px 12px":"12px 12px 12px 2px",padding:"8px 12px",fontSize:13,lineHeight:1.4}},m.text),
+        el("div",{style:{fontSize:10,color:"#94a3b8",marginTop:3,textAlign:isMe?"right":"left"}},`${m.from==="J"?"Jorge":"Eva"} · ${new Date(m.ts).toLocaleString("es-ES",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}`)
+      );
+      mWrap.appendChild(mInner);msgBox.appendChild(mWrap);
+    });
+    setTimeout(()=>{const b=document.getElementById("msgBox");if(b)b.scrollTop=b.scrollHeight;},50);
+
+    const inputRow=el("div",{style:{display:"flex",gap:8,alignItems:"start"}});
+    const ta=el("textarea",{style:{...inputSt,flex:1,minHeight:42,resize:"none",lineHeight:1.4}});
+    ta.placeholder="Escribe un mensaje... (Enter para enviar)";
+    ta.addEventListener("keydown",async e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();const t=ta.value.trim();if(t){await sendMessage(t,STATE.user.role);}}});
+    const sendBtn=el("button",{style:{...btnPrimarySt,padding:"9px 14px",flexShrink:0},onClick:async()=>{const t=ta.value.trim();if(t)await sendMessage(t,STATE.user.role);}},`→`);
+    inputRow.append(ta,sendBtn);
+    wrap.append(msgBox,inputRow);
+  }
+  return wrap;
+}
+
+// ── RESUMEN ───────────────────────────────────────────────────────────────────
+function renderResumen(diff){
+  const {expenses,events,agreements}=STATE;
+  const wrap=el("div",{});
+  const total=expenses.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  const pendingTotal=expenses.filter(e=>e.status==="pendiente").reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  const byCat={};expenses.forEach(e=>{byCat[e.cat]=(byCat[e.cat]||0)+parseFloat(e.amount||0);});
+  const topCats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const cd={J:0,E:0,ambos:0};
+  events.forEach(ev=>{let d=new Date(ev.from+"T12:00:00"),end=new Date(ev.to+"T12:00:00");while(d<=end){cd[ev.who]=(cd[ev.who]||0)+1;d.setDate(d.getDate()+1);}});
+  const td=cd.J+cd.E+cd.ambos;
+
+  const statsGrid=el("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}});
+  [[expenses.length,"Gastos","#2563eb"],[fmtMoney(total),"Total acumulado","#059669"],[fmtMoney(pendingTotal),"Pendiente","#d97706"],[agreements.filter(a=>a.status==="activo").length,"Acuerdos activos","#7c3aed"]].forEach(([v,l,c])=>{
+    const s=el("div",{style:{...cardSt,textAlign:"center"}});s.append(el("div",{style:{fontSize:17,fontWeight:700,color:c}},String(v)),el("div",{style:{fontSize:11,color:"#64748b",marginTop:2}},l));statsGrid.appendChild(s);
+  });
+  wrap.appendChild(statsGrid);
+
+  if(td>0){
+    const cCard=el("div",{style:{...cardSt,marginBottom:14}});
+    cCard.appendChild(el("div",{style:{fontWeight:600,fontSize:14,marginBottom:10}},"Distribución custodia"));
+    const bar=el("div",{style:{display:"flex",height:10,borderRadius:5,overflow:"hidden",marginBottom:8}});
+    [["J","#2563eb"],["E","#7c3aed"],["ambos","#059669"]].forEach(([k,c])=>{if(cd[k]>0)bar.appendChild(el("div",{style:{flex:cd[k],background:c}}));});
+    cCard.appendChild(bar);
+    const cRow=el("div",{style:{display:"flex",gap:14,flexWrap:"wrap"}});
+    [["J","Jorge","#2563eb"],["E","Eva","#7c3aed"],["ambos","Ambos","#059669"]].forEach(([k,l,c])=>{
+      if(cd[k]>0){const d=el("div",{style:{display:"flex",alignItems:"center",gap:5}});d.append(el("div",{style:{width:8,height:8,borderRadius:2,background:c}}),el("span",{style:{fontSize:12}},`${l}: `),el("strong",{},`${cd[k]}d`),el("span",{style:{fontSize:11,color:"#94a3b8"}},`(${Math.round(cd[k]/td*100)}%)`));cRow.appendChild(d);}
+    });
+    cCard.append(cRow);wrap.appendChild(cCard);
+  }
+
+  if(topCats.length>0){
+    const catCard=el("div",{style:{...cardSt,marginBottom:14}});
+    catCard.appendChild(el("div",{style:{fontWeight:600,fontSize:14,marginBottom:12}},"Por categoría"));
+    topCats.forEach(([cat,amt])=>{
+      const r=el("div",{style:{marginBottom:10}});
+      const t=el("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:3}});
+      t.append(el("span",{style:{fontSize:13}},cat),el("span",{style:{fontSize:13,fontWeight:600}},fmtMoney(amt)));
+      const bar=el("div",{style:{height:5,background:"#f1f5f9",borderRadius:3,overflow:"hidden"}});
+      bar.appendChild(el("div",{style:{height:"100%",background:"#2563eb",width:`${(amt/total)*100}%`,borderRadius:3}}));
+      r.append(t,bar);catCard.appendChild(r);
+    });
+    wrap.appendChild(catCard);
+  }
+
+  wrap.appendChild(el("button",{style:{...btnPrimarySt,width:"100%",background:"#1e293b"},onClick:exportPDF},"📄 Exportar informe PDF"));
+  return wrap;
+}
+
+// ── Mini helpers ───────────────────────────────────────────────────────────────
+function inputEl(type,val,onChange,placeholder=""){
+  const i=el("input",{type,style:inputSt,placeholder});
+  i.value=val;
+  i.addEventListener("input",e=>onChange(e.target.value));
+  if(type==="date") i.addEventListener("change",e=>onChange(e.target.value));
+  return i;
+}
+function selectEl(options,val,onChange){
+  const s=el("select",{style:inputSt});
+  options.forEach(o=>s.appendChild(el("option",{value:o},o)));
+  s.value=val;s.addEventListener("change",e=>onChange(e.target.value));
+  return s;
+}
+
+const cardSt={background:"#fff",borderRadius:12,border:"1px solid #e2e8f0",padding:16};
+const inputSt={width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:14,boxSizing:"border-box",background:"#f8fafc",outline:"none",fontFamily:"inherit"};
+const lblSt={display:"block",fontSize:12,fontWeight:600,color:"#64748b",marginBottom:6};
+const btnPrimarySt={background:"#2563eb",color:"#fff",border:"none",borderRadius:10,padding:"11px 20px",fontWeight:600,fontSize:14,fontFamily:"inherit"};
+const btnSmSt={background:"#f1f5f9",border:"none",borderRadius:8,padding:"6px 12px",fontSize:16,color:"#1e293b"};
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+(async()=>{
+  document.getElementById("app").innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#64748b;font-family:system-ui">Cargando…</div>';
+  await loadAll();
+  render();
+})();
+</script>
+</body>
+</html>
