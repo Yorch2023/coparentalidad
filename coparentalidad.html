@@ -42,7 +42,7 @@ function el(tag,attrs={},children=[]){
     else if(k==="className") e.className=v;
     else e.setAttribute(k,v);
   });
-  children.forEach(c=>{ if(c!=null) e.appendChild(typeof c==="string"?document.createTextNode(c):c); });
+  (Array.isArray(children)?children:[children]).forEach(c=>{ if(c!=null) e.appendChild(typeof c==="string"?document.createTextNode(c):c); });
   return e;
 }
 
