@@ -591,24 +591,36 @@ function renderCalMonth(){
   );
 
   // Legend
-  const leg=el('div',{style:{display:'flex',gap:10,marginBottom:12,flexWrap:'wrap'}});
-  [['J','Jorge'],['E','Eva'],['ambos','Ambos']].forEach(([k,l])=>{
-    const d=el('div',{style:{display:'flex',alignItems:'center',gap:5}});
-    d.append(el('div',{style:{width:10,height:10,borderRadius:3,background:CUSTODY_TEXT[k]}}),el('span',{style:{fontSize:11,color:'#64748b'}},l));
+  const leg=el('div',{style:{display:'flex',gap:14,marginBottom:12,flexWrap:'wrap',alignItems:'center'}});
+  [['J','Jorge','#60a5fa'],['E','Eva','#a78bfa'],['ambos','Ambos','#6ee7b7'],['wed','Miérc. opcional','#f97316']].forEach(([k,l,color])=>{
+    const d=el('div',{style:{display:'flex',alignItems:'center',gap:6}});
+    d.append(
+      el('div',{style:{width:12,height:12,borderRadius:3,background:k==='wed'?'#431407':color,border:k==='wed'?'1px dashed #f97316':'none'}}),
+      el('span',{style:{fontSize:11,color:'#94a3b8'}},l)
+    );
     leg.appendChild(d);
   });
 
+  // Build day map — miércoles fijo gets special treatment
   const dayMap={};
+  const wedMap={};
   S.events.forEach(ev=>{
     if(ev.changeStatus==='rechazado') return;
+    if(ev.note==='Miércoles fijo'&&ev.from===ev.to){
+      wedMap[ev.from]=ev; return;
+    }
     let d=new Date(ev.from+'T12:00:00'),end=new Date(ev.to+'T12:00:00');
-    while(d<=end){dayMap[d.toISOString().slice(0,10)]=ev;d.setDate(d.getDate()+1);}
+    while(d<=end){
+      const k=d.toISOString().slice(0,10);
+      if(!wedMap[k]) dayMap[k]=ev;
+      d.setDate(d.getDate()+1);
+    }
   });
 
   const cal=el('div',{className:'card-dark',style:{padding:10,marginBottom:14}});
-  const hdr=el('div',{className:'cal-grid',style:{marginBottom:4}});
-  ['L','M','X','J','V','S','D'].forEach(d=>hdr.appendChild(el('div',{className:'cal-day-hdr'},d)));
-  cal.appendChild(hdr);
+  const calHdr=el('div',{className:'cal-grid',style:{marginBottom:4}});
+  ['L','M','X','J','V','S','D'].forEach(d=>calHdr.appendChild(el('div',{className:'cal-day-hdr'},d)));
+  cal.appendChild(calHdr);
 
   const firstDay=new Date(UI.calYear,UI.calMonth,1).getDay();
   const dim=new Date(UI.calYear,UI.calMonth+1,0).getDate();
@@ -619,14 +631,29 @@ function renderCalMonth(){
   for(let n=1;n<=dim;n++){
     const key=`${UI.calYear}-${String(UI.calMonth+1).padStart(2,'0')}-${String(n).padStart(2,'0')}`;
     const ev=dayMap[key];
+    const wedEv=wedMap[key];
     const isTdy=key===today();
     const isPend=ev&&ev.changeStatus==='pendiente';
+
+    let bgColor='transparent', textColor='#94a3b8', borderStyle='none', clickEv=null;
+    if(wedEv){
+      bgColor='#431407'; textColor='#f97316'; borderStyle='1px dashed #f97316'; clickEv=wedEv;
+    } else if(ev&&!isPend){
+      bgColor=CUSTODY_BG[ev.who]; textColor=CUSTODY_TEXT[ev.who]; clickEv=ev;
+    } else if(isPend){
+      borderStyle='1px dashed #475569'; clickEv=ev;
+    }
+
     const cell=el('div',{
-      className:'cal-cell'+(ev?' has-event':''),
-      style:{background:ev&&!isPend?CUSTODY_BG[ev.who]:'transparent'},
-      onClick:()=>{if(ev){UI.calSelected=ev;render();}}
+      className:'cal-cell'+(ev||wedEv?' has-event':''),
+      style:{background:bgColor},
+      onClick:()=>{if(clickEv){UI.calSelected=clickEv;render();}}
     });
-    cell.appendChild(el('div',{className:'cal-num'+(isTdy?' today':''),style:{color:ev&&!isPend?CUSTODY_TEXT[ev.who]:isTdy?'':'#94a3b8',border:isPend?'1px dashed #475569':'none'}},String(n)));
+    cell.appendChild(el('div',{
+      className:'cal-num'+(isTdy?' today':''),
+      style:{color:isTdy?'':textColor, border:isTdy?'none':borderStyle}
+    },String(n)));
+    if(wedEv&&!isTdy) cell.appendChild(el('div',{style:{width:5,height:5,borderRadius:'50%',background:'#f97316',marginTop:1}}));
     grid.appendChild(cell);
   }
   cal.appendChild(grid);
