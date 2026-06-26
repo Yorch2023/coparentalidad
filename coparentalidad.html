@@ -214,6 +214,59 @@ async function sendCustodyNotification(action, event, fromUser){
   }
 }
 
+// ── Agreement templates ───────────────────────────────────────────────────────
+const AG_TEMPLATES = [
+  {category:'Vacaciones', title:'Vacaciones de verano', detail:'Martina pasa la primera quincena de agosto con Jorge y la segunda con Eva. Los viajes al extranjero requieren consentimiento previo de ambos.'},
+  {category:'Vacaciones', title:'Navidad', detail:'Años pares: del 24 al 31 de diciembre con Jorge, del 1 al 6 de enero con Eva. Años impares: al revés.'},
+  {category:'Vacaciones', title:'Semana Santa', detail:'Años pares con Jorge, años impares con Eva. Incluye el fin de semana anterior y posterior.'},
+  {category:'Salud', title:'Decisiones médicas', detail:'Las decisiones médicas no urgentes requieren acuerdo previo de ambos. Las urgencias las gestiona el progenitor que esté con Martina e informa al otro en menos de 2 horas.'},
+  {category:'Salud', title:'Medicación habitual', detail:'Cada progenitor mantiene stock de medicación habitual. Se informa de cualquier cambio de pauta.'},
+  {category:'Colegio', title:'Reuniones escolares', detail:'Ambos progenitores asisten a las reuniones del colegio. Si no es posible, el que asista informa al otro en 24h.'},
+  {category:'Colegio', title:'Actividades extraescolares', detail:'Las actividades extraescolares las lleva el progenitor que tiene custodia ese día.'},
+  {category:'Económico', title:'Gastos extraordinarios', detail:'Los gastos superiores a 100€ requieren acuerdo previo. Se dividen al 50%.'},
+  {category:'Económico', title:'Gastos corrientes', detail:'Cada progenitor cubre los gastos corrientes durante su semana. Los gastos médicos y escolares al 50%.'},
+  {category:'General', title:'Comunicación con Martina', detail:'Martina puede llamar al otro progenitor en cualquier momento. Se facilita la comunicación diaria si ella lo desea.'},
+];
+
+// ── Checklist defaults ────────────────────────────────────────────────────────
+const CHECKLIST_DEFAULT = [
+  {id:1, text:'Mochila del colegio con todo el material', done:false},
+  {id:2, text:'Ropa suficiente para la semana', done:false},
+  {id:3, text:'Medicación habitual', done:false},
+  {id:4, text:'Cargador del móvil/tablet', done:false},
+  {id:5, text:'Objeto de apego (peluche/manta)', done:false},
+  {id:6, text:'Zapatillas de deporte', done:false},
+  {id:7, text:'Documentación médica si hay cita', done:false},
+  {id:8, text:'Ropa de abrigo según tiempo', done:false},
+];
+
+function loadChecklist(){
+  try { return JSON.parse(localStorage.getItem('cp:checklist')) || JSON.parse(JSON.stringify(CHECKLIST_DEFAULT)); }
+  catch { return JSON.parse(JSON.stringify(CHECKLIST_DEFAULT)); }
+}
+function saveChecklist(list){ try { localStorage.setItem('cp:checklist', JSON.stringify(list)); } catch{} }
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+async function requestNotifPermission(){
+  if(!('Notification' in window)) return false;
+  if(Notification.permission==='granted') return true;
+  const p = await Notification.requestPermission();
+  return p==='granted';
+}
+function fireNotif(title, body){
+  if(Notification.permission==='granted') new Notification(title,{body,icon:'https://yorch2023.github.io/coparentalidad/favicon.png'});
+}
+function scheduleUpcomingNotifications(){
+  if(Notification.permission!=='granted') return;
+  const todayStr=today();
+  S.events.filter(ev=>ev.from>=todayStr&&ev.changeStatus!=='rechazado').slice(0,10).forEach(ev=>{
+    const msDay = new Date(ev.from+'T08:00:00').getTime()-Date.now();
+    const msDayBefore = new Date(addDays(ev.from,-1)+'T20:00:00').getTime()-Date.now();
+    if(msDayBefore>0) setTimeout(()=>fireNotif('🔔 Cambio de custodia mañana',`${S.child.name||'Martina'} pasa con ${nameOf(ev.who)} mañana`), msDayBefore);
+    if(msDay>0) setTimeout(()=>fireNotif('📅 Cambio de custodia hoy',`${S.child.name||'Martina'} pasa con ${nameOf(ev.who)} hoy`), msDay);
+  });
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let S = {
   user: null,
@@ -234,7 +287,7 @@ let UI = {
   // Expenses
   expFilter:'todos', expCatFilter:'todas',
   showExpForm:false,
-  expForm:{date:today(),desc:'',amount:'',cat:'Médico',paidBy:'J',split:'50-50',status:'pendiente',note:''},
+  expForm:{date:today(),desc:'',amount:'',cat:'Médico',paidBy:'J',split:'50-50',status:'pendiente',note:'',receipt:null},
   // Agreements
   showAgForm:false, agSubTab:0,
   agForm:{date:today(),title:'',detail:'',category:'General'},
@@ -245,6 +298,14 @@ let UI = {
   // Wishlist
   showWishForm:false,
   wishForm:{item:'',priority:'normal',requestedBy:'J'},
+  // Checklist
+  checklistItem:'',
+  // AI parser
+  showAiParser:false, aiParserText:'', aiParserLoading:false, aiParserResult:null,
+  // Agreements
+  agTemplateOpen:false,
+  // Notif
+  notifRequested:false,
 };
 
 let rtSubs = [];
@@ -260,7 +321,7 @@ async function loadAll(){
     sb.from('child_profile').select('*').limit(1).single(),
   ]);
   S.events    = (ev.data||[]).map(r=>({...r,from:r.from_date,to:r.to_date,changeRequest:r.change_request,changeStatus:r.change_status}));
-  S.expenses  = (ex.data||[]).map(r=>({...r,desc:r.description,paidBy:r.paid_by,liquidatedAt:r.liquidated_at}));
+  S.expenses  = (ex.data||[]).map(r=>({...r,desc:r.description,paidBy:r.paid_by,liquidatedAt:r.liquidated_at,receipt:r.receipt}));
   S.agreements= ag.data||[];
   S.messages  = (ms.data||[]).map(r=>({...r,from:r.from_user}));
   S.wishlist  = (wl.data||[]).map(r=>({...r,requestedBy:r.requested_by,addedAt:r.added_at}));
@@ -306,7 +367,7 @@ async function dbToggleExpense(id){
   await loadAll(); render();
 }
 async function dbAddExpense(f){
-  await sb.from('expenses').insert({date:f.date,description:f.desc,amount:parseFloat(f.amount),cat:f.cat,paid_by:f.paidBy,split:f.split,status:f.status,note:f.note,created_by:S.user?.role});
+  await sb.from('expenses').insert({date:f.date,description:f.desc,amount:parseFloat(f.amount),cat:f.cat,paid_by:f.paidBy,split:f.split,status:f.status,note:f.note,receipt:f.receipt||null,created_by:S.user?.role});
   await loadAll(); render();
 }
 async function dbDelExpense(id){ await sb.from('expenses').delete().eq('id',id); await loadAll(); render(); }
@@ -428,7 +489,7 @@ function renderShell(){
   }
 
   // Tabs
-  const TABS=['🏠 Inicio','📅 Custodia','💶 Gastos','👤 Ficha','📝 Acuerdos'];
+  const TABS=['🏠 Inicio','📅 Custodia','💶 Gastos','👤 Ficha','📝 Acuerdos','✅ Intercambio','📊 Stats'];
   const tabBar=el('div',{className:'tab-bar'});
   TABS.forEach((t,i)=>tabBar.appendChild(el('button',{className:'tab-btn'+(S.tab===i?' active':''),onClick:()=>{S.tab=i;render();}},t)));
 
@@ -438,6 +499,8 @@ function renderShell(){
   if(S.tab===2) content.appendChild(renderGastos(diff));
   if(S.tab===3) content.appendChild(renderFicha());
   if(S.tab===4) content.appendChild(renderAcuerdos());
+  if(S.tab===5) content.appendChild(renderIntercambio());
+  if(S.tab===6) content.appendChild(renderStats());
 
   wrap.append(hdr);
   if(alertEl) wrap.append(alertEl);
@@ -555,8 +618,12 @@ function renderCustodia(){
   // Add period button
   wrap.appendChild(el('button',{className:'btn-primary',style:{width:'100%',marginBottom:10,padding:12},onClick:()=>{UI.showEventForm=!UI.showEventForm;UI.showWeekGen=false;render();}},UI.showEventForm?'Cancelar':'+ Añadir periodo'));
 
+  // AI event parser button
+  wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:8,fontSize:12},onClick:()=>{UI.showAiParser=!UI.showAiParser;UI.showEventForm=false;UI.showWeekGen=false;render();}},UI.showAiParser?'Cancelar':'🤖 Crear evento con IA (describe en texto)'));
+  if(UI.showAiParser) wrap.appendChild(renderAiEventParser());
+
   // Weekly schedule generator button
-  wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:12,fontSize:12},onClick:()=>{UI.showWeekGen=!UI.showWeekGen;UI.showEventForm=false;render();}},UI.showWeekGen?'Cancelar':'⚙️ Generar turnos semanales automáticos'));
+  wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:12,fontSize:12},onClick:()=>{UI.showWeekGen=!UI.showWeekGen;UI.showEventForm=false;UI.showAiParser=false;render();}},UI.showWeekGen?'Cancelar':'⚙️ Generar turnos semanales automáticos'));
 
   if(UI.showEventForm) wrap.appendChild(renderEventForm());
   if(UI.showWeekGen)   wrap.appendChild(renderWeekGenForm());
@@ -861,6 +928,11 @@ function renderGastos(diff){
     if(e.status==='pendiente'&&age>=14) tags.appendChild(badge(`⚠ ${age}d`,'badge-warn'));
     info.append(tags,el('div',{style:{fontWeight:700,fontSize:13,marginBottom:2}},e.desc),el('div',{style:{fontSize:11,color:'#64748b'}},`${fmtM(e.amount)} · Paga ${e.paidBy==='J'?'Jorge':'Eva'} · ${e.split}`));
     if(e.note) info.appendChild(el('div',{style:{fontSize:11,color:'#475569',marginTop:2,fontStyle:'italic'}},e.note));
+    if(e.receipt){
+      const thumb=el('img',{style:{width:48,height:48,borderRadius:6,objectFit:'cover',marginTop:6,cursor:'pointer'},onClick:()=>{ const w=window.open('','_blank'); w.document.write(`<img src="${e.receipt}" style="max-width:100%;max-height:100vh">`); }});
+      thumb.src=e.receipt;
+      info.appendChild(thumb);
+    }
     const btns=el('div',{style:{display:'flex',flexDirection:'column',gap:5,marginLeft:8}});
     btns.append(
       el('button',{className:e.status==='pendiente'?'badge badge-warn':'badge badge-ok',style:{border:'none',cursor:'pointer',padding:'4px 8px'},onClick:()=>dbToggleExpense(e.id)},e.status==='pendiente'?'Pendiente':'Liquidado'),
@@ -895,7 +967,7 @@ function renderGastos(diff){
     form.appendChild(el('button',{className:'btn-primary',style:{width:'100%'},onClick:async()=>{
       if(!f.desc||!f.amount)return;
       await dbAddExpense(f);
-      UI.showExpForm=false;UI.expForm={date:today(),desc:'',amount:'',cat:'Médico',paidBy:'J',split:'50-50',status:'pendiente',note:''};
+      UI.showExpForm=false;UI.expForm={date:today(),desc:'',amount:'',cat:'Médico',paidBy:'J',split:'50-50',status:'pendiente',note:'',receipt:null};
     }},'Guardar gasto'));
     wrap.appendChild(form);
   }
@@ -993,6 +1065,31 @@ function renderAcuerdos(){
       btns.append(el('button',{className:'btn-ghost',style:{fontSize:10},onClick:()=>dbToggleAgreement(a.id)},'Archivar'),el('button',{className:'btn-danger',onClick:()=>dbDelAgreement(a.id)},'✕'));
       t.append(info,btns);r.appendChild(t);wrap.appendChild(r);
     });
+    // Templates button
+    wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:8,fontSize:12},onClick:()=>{UI.agTemplateOpen=!UI.agTemplateOpen;render();}},UI.agTemplateOpen?'Cerrar plantillas':'📋 Usar plantilla de acuerdo'));
+    if(UI.agTemplateOpen){
+      const tmplWrap=el('div',{className:'card-dark',style:{marginBottom:12}});
+      tmplWrap.appendChild(el('div',{style:{fontSize:11,color:'#64748b',marginBottom:10}},'Selecciona una plantilla para editar y guardar:'));
+      // Group by category
+      const cats=[...new Set(AG_TEMPLATES.map(t=>t.category))];
+      cats.forEach(cat=>{
+        tmplWrap.appendChild(el('div',{style:{fontSize:10,fontWeight:700,color:'#475569',textTransform:'uppercase',letterSpacing:.5,marginBottom:6,marginTop:8}},cat));
+        AG_TEMPLATES.filter(t=>t.category===cat).forEach(t=>{
+          const tb=el('button',{
+            style:{display:'block',width:'100%',textAlign:'left',padding:'9px 12px',marginBottom:6,background:'#1e293b',border:'1px solid #334155',borderRadius:9,cursor:'pointer'},
+            onClick:()=>{
+              UI.agForm={date:today(),title:t.title,detail:t.detail,category:t.category};
+              UI.agTemplateOpen=false;
+              UI.showAgForm=true;
+              render();
+            }
+          });
+          tb.append(el('div',{style:{fontSize:13,fontWeight:600,color:'#e2e8f0',marginBottom:2}},t.title),el('div',{style:{fontSize:11,color:'#475569'}},t.detail.slice(0,60)+'…'));
+          tmplWrap.appendChild(tb);
+        });
+      });
+      wrap.appendChild(tmplWrap);
+    }
     wrap.appendChild(el('button',{className:'btn-primary',style:{width:'100%',marginBottom:10,padding:11},onClick:()=>{UI.showAgForm=!UI.showAgForm;render();}},UI.showAgForm?'Cancelar':'+ Registrar acuerdo'));
     if(UI.showAgForm){
       const f=UI.agForm;
@@ -1039,10 +1136,298 @@ function renderAcuerdos(){
   return wrap;
 }
 
+
+
+// ── AI EVENT PARSER ───────────────────────────────────────────────────────────
+function renderAiEventParser(){
+  const wrap=el('div',{className:'card fade-in',style:{marginBottom:12,borderColor:'#1e3a5f'}});
+  wrap.appendChild(el('div',{style:{fontWeight:700,fontSize:13,color:'#60a5fa',marginBottom:8}},'🤖 Describe el plan en texto'));
+  wrap.appendChild(el('div',{style:{fontSize:11,color:'#64748b',marginBottom:10}},'Ejemplo: "Martina se queda con Eva del 15 al 22 de julio por vacaciones" o "Jorge tiene a Martina el puente de octubre"'));
+
+  const ta=el('textarea',{className:'input',style:{minHeight:70,resize:'vertical',marginBottom:10}});
+  ta.value=UI.aiParserText||'';
+  ta.placeholder='Describe el periodo de custodia…';
+  ta.addEventListener('input',e=>UI.aiParserText=e.target.value);
+  wrap.appendChild(ta);
+
+  if(UI.aiParserLoading){
+    wrap.appendChild(el('div',{style:{textAlign:'center',color:'#60a5fa',padding:'12px 0',fontSize:13}},'🤖 Procesando…'));
+  } else if(UI.aiParserResult){
+    const r=UI.aiParserResult;
+    const prev=el('div',{className:'card-dark',style:{marginBottom:10}});
+    prev.appendChild(el('div',{style:{fontSize:11,color:'#64748b',marginBottom:8}},'Resultado interpretado:'));
+    prev.append(
+      el('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:4}},[el('span',{style:{fontSize:12,color:'#94a3b8'}},'Con quién:'),el('span',{style:{fontSize:12,fontWeight:700,color:CUSTODY_TEXT[r.who]||'#f1f5f9'}},nameOf(r.who))]),
+      el('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:4}},[el('span',{style:{fontSize:12,color:'#94a3b8'}},'Desde:'),el('span',{style:{fontSize:12,fontWeight:700}},fmt(r.from))]),
+      el('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:4}},[el('span',{style:{fontSize:12,color:'#94a3b8'}},'Hasta:'),el('span',{style:{fontSize:12,fontWeight:700}},fmt(r.to))]),
+      el('div',{style:{display:'flex',justifyContent:'space-between'}},[el('span',{style:{fontSize:12,color:'#94a3b8'}},'Nota:'),el('span',{style:{fontSize:12,fontWeight:700}},r.note||'—')])
+    );
+    wrap.appendChild(prev);
+    const bRow=el('div',{style:{display:'flex',gap:8}});
+    bRow.append(
+      el('button',{className:'btn-primary',style:{flex:1},onClick:async()=>{
+        await dbAddEvent({...UI.aiParserResult,changeRequest:false});
+        UI.showAiParser=false;UI.aiParserText='';UI.aiParserResult=null;
+      }},'✓ Añadir al calendario'),
+      el('button',{className:'btn-ghost',style:{flex:1},onClick:()=>{UI.aiParserResult=null;render();}},'Reintentar')
+    );
+    wrap.appendChild(bRow);
+  } else {
+    wrap.appendChild(el('button',{className:'btn-primary',style:{width:'100%'},onClick:async()=>{
+      if(!UI.aiParserText.trim()) return;
+      UI.aiParserLoading=true;render();
+      try{
+        const yr=new Date().getFullYear();
+        const prompt=`Hoy es ${today()}. Analiza este texto sobre un plan de custodia y devuelve SOLO un objeto JSON con estos campos exactos: who (J=Jorge, E=Eva, ambos), from (YYYY-MM-DD), to (YYYY-MM-DD), note (string breve). Texto: "${UI.aiParserText}". Responde SOLO con el JSON, sin explicación ni markdown.`;
+        const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:200,messages:[{role:'user',content:prompt}]})});
+        const data=await resp.json();
+        const text=data.content?.[0]?.text||'';
+        const clean=text.replace(/```json|```/g,'').trim();
+        UI.aiParserResult=JSON.parse(clean);
+      }catch(e){
+        UI.aiParserResult={who:'J',from:today(),to:today(),note:'Error al interpretar — edita manualmente'};
+      }
+      UI.aiParserLoading=false;render();
+    }},'🤖 Interpretar con IA')}
+  );
+  return wrap;
+}
+
+// ── STATS ─────────────────────────────────────────────────────────────────────
+function renderStats(){
+  const wrap=el('div',{});
+  const now=new Date();
+
+  // ── Custody distribution ──
+  const cd={J:0,E:0,ambos:0};
+  S.events.forEach(ev=>{
+    if(ev.changeStatus==='rechazado') return;
+    let d=new Date(ev.from+'T12:00:00'),end=new Date(ev.to+'T12:00:00');
+    while(d<=end){cd[ev.who]=(cd[ev.who]||0)+1;d.setDate(d.getDate()+1);}
+  });
+  const td=cd.J+cd.E+cd.ambos;
+
+  if(td>0){
+    const cc=el('div',{className:'card',style:{marginBottom:14}});
+    cc.appendChild(el('div',{style:{fontWeight:700,fontSize:14,marginBottom:12}},'📅 Distribución de custodia'));
+    // Bar
+    const bar=el('div',{style:{display:'flex',height:14,borderRadius:7,overflow:'hidden',marginBottom:12}});
+    [['J','#3b82f6'],['E','#8b5cf6'],['ambos','#10b981']].forEach(([k,c])=>{
+      if(cd[k]>0) bar.appendChild(el('div',{style:{flex:cd[k],background:c}}));
+    });
+    cc.appendChild(bar);
+    const statsRow=el('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}});
+    [['J','Jorge','#3b82f6'],['E','Eva','#8b5cf6'],['ambos','Ambos','#10b981']].forEach(([k,l,c])=>{
+      if(cd[k]===0) return;
+      const s=el('div',{style:{textAlign:'center',padding:'10px 6px',background:'#0f172a',borderRadius:10,border:`1px solid ${c}22`}});
+      s.append(
+        el('div',{style:{fontWeight:800,fontSize:18,color:c}},`${Math.round(cd[k]/td*100)}%`),
+        el('div',{style:{fontSize:11,color:'#64748b',marginTop:2}},l),
+        el('div',{style:{fontSize:10,color:'#334155'}},`${cd[k]} días`)
+      );
+      statsRow.appendChild(s);
+    });
+    cc.appendChild(statsRow);
+    wrap.appendChild(cc);
+  }
+
+  // ── Monthly expenses last 6 months ──
+  const monthly={};
+  for(let i=5;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    monthly[key]={total:0,J:0,E:0,label:MONTHS[d.getMonth()]};
+  }
+  S.expenses.forEach(e=>{
+    const key=e.date.slice(0,7);
+    if(monthly[key]){
+      const a=parseFloat(e.amount||0);
+      monthly[key].total+=a;
+      monthly[key][e.paidBy]=(monthly[key][e.paidBy]||0)+a;
+    }
+  });
+  const entries=Object.entries(monthly);
+  const maxVal=Math.max(...entries.map(([,v])=>v.total),1);
+
+  if(entries.some(([,v])=>v.total>0)){
+    const ec=el('div',{className:'card',style:{marginBottom:14}});
+    ec.appendChild(el('div',{style:{fontWeight:700,fontSize:14,marginBottom:14}},'💶 Gastos últimos 6 meses'));
+    const chart=el('div',{style:{display:'flex',gap:6,alignItems:'flex-end',height:100,marginBottom:8}});
+    entries.forEach(([key,v])=>{
+      const col2=el('div',{style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}});
+      if(v.total>0) col2.appendChild(el('div',{style:{fontSize:9,color:'#64748b',textAlign:'center'}},`${Math.round(v.total)}€`));
+      const barWrap=el('div',{style:{width:'100%',display:'flex',flexDirection:'column',justifyContent:'flex-end',height:80,gap:1}});
+      // Stacked: Jorge on bottom, Eva on top
+      const jH=Math.round((v.J/maxVal)*78);
+      const eH=Math.round((v.E/maxVal)*78);
+      if(v.E>0) barWrap.appendChild(el('div',{style:{width:'100%',height:eH+'px',background:'#8b5cf6',borderRadius:'3px 3px 0 0',minHeight:v.E>0?3:0}}));
+      if(v.J>0) barWrap.appendChild(el('div',{style:{width:'100%',height:jH+'px',background:'#3b82f6',borderRadius:v.E>0?0:'3px 3px 0 0',minHeight:v.J>0?3:0}}));
+      if(v.total===0) barWrap.appendChild(el('div',{style:{width:'100%',height:4,background:'#1e293b',borderRadius:3}}));
+      col2.appendChild(barWrap);
+      col2.appendChild(el('div',{style:{fontSize:9,color:'#475569',textAlign:'center'}},v.label));
+      chart.appendChild(col2);
+    });
+    ec.appendChild(chart);
+    // Legend
+    const leg=el('div',{style:{display:'flex',gap:14,marginTop:4}});
+    [['#3b82f6','Jorge'],['#8b5cf6','Eva']].forEach(([c,l])=>{
+      const d=el('div',{style:{display:'flex',alignItems:'center',gap:5}});
+      d.append(el('div',{style:{width:10,height:10,borderRadius:2,background:c}}),el('span',{style:{fontSize:11,color:'#64748b'}},l));
+      leg.appendChild(d);
+    });
+    ec.appendChild(leg);
+    wrap.appendChild(ec);
+  }
+
+  // ── Expense breakdown ──
+  const byCat={};
+  S.expenses.forEach(e=>{byCat[e.cat]=(byCat[e.cat]||0)+parseFloat(e.amount||0);});
+  const topCats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+  const totalExp=S.expenses.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+
+  if(topCats.length>0){
+    const bc=el('div',{className:'card',style:{marginBottom:14}});
+    bc.appendChild(el('div',{style:{fontWeight:700,fontSize:14,marginBottom:12}},'📊 Gastos por categoría'));
+    topCats.forEach(([cat,amt])=>{
+      const r=el('div',{style:{marginBottom:10}});
+      const t=el('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:4}});
+      t.append(el('span',{style:{fontSize:13}},cat),el('span',{style:{fontSize:13,fontWeight:700}},`${fmtM(amt)} (${Math.round(amt/totalExp*100)}%)`));
+      const barWrap=el('div',{style:{height:6,background:'#0f172a',borderRadius:3,overflow:'hidden'}});
+      barWrap.appendChild(el('div',{style:{height:'100%',background:'#3b82f6',width:`${amt/totalExp*100}%`,borderRadius:3}}));
+      r.append(t,barWrap);bc.appendChild(r);
+    });
+    // Totals
+    const pend=S.expenses.filter(e=>e.status==='pendiente').reduce((s,e)=>s+parseFloat(e.amount||0),0);
+    bc.appendChild(el('div',{style:{display:'flex',justifyContent:'space-between',paddingTop:10,borderTop:'1px solid #0f172a',marginTop:4}},[
+      el('div',{style:{textAlign:'center'}},[el('div',{style:{fontWeight:800,fontSize:16}},fmtM(totalExp)),el('div',{style:{fontSize:11,color:'#64748b'}},'Total')]),
+      el('div',{style:{textAlign:'center'}},[el('div',{style:{fontWeight:800,fontSize:16,color:'#fb923c'}},fmtM(pend)),el('div',{style:{fontSize:11,color:'#64748b'}},'Pendiente')]),
+      el('div',{style:{textAlign:'center'}},[el('div',{style:{fontWeight:800,fontSize:16,color:'#6ee7b7'}},fmtM(totalExp-pend)),el('div',{style:{fontSize:11,color:'#64748b'}},'Liquidado')]),
+    ]));
+    wrap.appendChild(bc);
+  }
+
+  // ── Agreements by category ──
+  const byAg={};
+  S.agreements.filter(a=>a.status==='activo').forEach(a=>{byAg[a.category]=(byAg[a.category]||0)+1;});
+  if(Object.keys(byAg).length>0){
+    const ac=el('div',{className:'card'});
+    ac.appendChild(el('div',{style:{fontWeight:700,fontSize:14,marginBottom:10}},'📝 Acuerdos activos por área'));
+    Object.entries(byAg).sort((a,b)=>b[1]-a[1]).forEach(([cat,n])=>{
+      const r=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',borderBottom:'1px solid #0f172a'}});
+      r.append(el('span',{style:{fontSize:13}},cat),badge(String(n),'badge-J'));
+      ac.appendChild(r);
+    });
+    wrap.appendChild(ac);
+  }
+
+  if(td===0&&totalExp===0) wrap.appendChild(el('div',{style:{textAlign:'center',color:'#475569',padding:'40px 0',fontSize:13}},'Añade datos para ver las estadísticas'));
+  return wrap;
+}
+
+// ── INTERCAMBIO ───────────────────────────────────────────────────────────────
+function renderIntercambio(){
+  const wrap=el('div',{});
+
+  // Notification card
+  const notifCard=el('div',{className:'card',style:{marginBottom:14}});
+  notifCard.appendChild(el('div',{style:{fontWeight:700,fontSize:14,marginBottom:8}},'🔔 Recordatorios de cambio'));
+  if(!('Notification' in window)){
+    notifCard.appendChild(el('div',{style:{fontSize:12,color:'#475569'}},'Tu navegador no soporta notificaciones.'));
+  } else if(Notification.permission==='granted'){
+    notifCard.append(
+      el('div',{style:{fontSize:12,color:'#6ee7b7',marginBottom:6}},'✅ Notificaciones activadas'),
+      el('div',{style:{fontSize:11,color:'#64748b'}},'Recibirás un aviso la tarde anterior y la mañana del cambio de custodia.')
+    );
+  } else {
+    notifCard.append(
+      el('div',{style:{fontSize:12,color:'#64748b',marginBottom:10}},'Activa las notificaciones para recibir recordatorios automáticos de cada cambio de custodia en este dispositivo.'),
+      el('button',{className:'btn-primary',style:{width:'100%'},onClick:async()=>{
+        const ok=await requestNotifPermission();
+        S.notifEnabled=ok;
+        if(ok){ scheduleUpcomingNotifications(); render(); }
+      }},'Activar notificaciones en este móvil')
+    );
+  }
+  wrap.appendChild(notifCard);
+
+  // Next handover info
+  const todayStr=today();
+  const nextEv=[...S.events].filter(ev=>ev.from>=todayStr&&ev.changeStatus!=='rechazado').sort((a,b)=>a.from.localeCompare(b.from))[0];
+  if(nextEv){
+    const nc=el('div',{className:'today-card',style:{marginBottom:14}});
+    nc.append(
+      el('div',{style:{fontSize:11,color:'#94a3b8',marginBottom:6,textTransform:'uppercase',letterSpacing:.5}},'Próximo intercambio'),
+      el('div',{style:{fontWeight:800,fontSize:20,color:CUSTODY_TEXT[nextEv.who],marginBottom:4}},`Con ${nameOf(nextEv.who)}`),
+      el('div',{style:{fontSize:13,color:'#94a3b8'}},`${fmt(nextEv.from)} · ${daysUntil(nextEv.from)===0?'HOY':daysUntil(nextEv.from)===1?'Mañana':'En '+daysUntil(nextEv.from)+' días'}`)
+    );
+    wrap.appendChild(nc);
+  }
+
+  // Checklist
+  const cc=el('div',{className:'card'});
+  const ch=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}});
+  const done=S.checklist.filter(i=>i.done).length;
+  ch.append(
+    el('div',{},[
+      el('div',{style:{fontWeight:700,fontSize:14}},'✅ Checklist de intercambio'),
+      el('div',{style:{fontSize:11,color:'#64748b',marginTop:2}},`${done}/${S.checklist.length} completados`)
+    ]),
+    el('button',{className:'btn-ghost',style:{fontSize:11},onClick:()=>{
+      S.checklist=S.checklist.map(i=>({...i,done:false}));
+      saveChecklist(S.checklist);render();
+    }},'Resetear')
+  );
+  cc.appendChild(ch);
+
+  // Progress bar
+  const prog=el('div',{style:{height:6,background:'#1e293b',borderRadius:3,overflow:'hidden',marginBottom:14}});
+  prog.appendChild(el('div',{style:{height:'100%',background:'#3b82f6',width:`${S.checklist.length?done/S.checklist.length*100:0}%`,borderRadius:3,transition:'width .3s'}}));
+  cc.appendChild(prog);
+
+  S.checklist.forEach((item,idx)=>{
+    const r=el('div',{style:{display:'flex',alignItems:'center',gap:10,padding:'9px 0',borderBottom:'1px solid #0f172a'}});
+    const chk=el('button',{
+      style:{width:22,height:22,borderRadius:5,border:'1px solid',borderColor:item.done?'#3b82f6':'#334155',background:item.done?'#3b82f6':'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:12},
+      onClick:()=>{S.checklist[idx].done=!S.checklist[idx].done;saveChecklist(S.checklist);render();}
+    },item.done?'✓':'');
+    r.append(chk,el('div',{style:{flex:1,fontSize:13,color:item.done?'#475569':'#e2e8f0',textDecoration:item.done?'line-through':'none'}},item.text));
+    // Delete button
+    r.appendChild(el('button',{style:{background:'none',border:'none',color:'#334155',fontSize:12,cursor:'pointer'},onClick:()=>{S.checklist.splice(idx,1);saveChecklist(S.checklist);render();}},'✕'));
+    cc.appendChild(r);
+  });
+
+  // Add item
+  const addRow=el('div',{style:{display:'flex',gap:8,marginTop:12}});
+  const newInp=el('input',{className:'input',placeholder:'Añadir elemento al checklist…',style:{flex:1}});
+  newInp.value=UI.checklistItem||'';
+  newInp.addEventListener('input',e=>UI.checklistItem=e.target.value);
+  newInp.addEventListener('keydown',e=>{
+    if(e.key==='Enter'&&newInp.value.trim()){
+      S.checklist.push({id:Date.now(),text:newInp.value.trim(),done:false});
+      saveChecklist(S.checklist);UI.checklistItem='';render();
+    }
+  });
+  addRow.append(newInp,el('button',{className:'btn-primary',style:{flexShrink:0,padding:'10px 14px'},onClick:()=>{
+    if(newInp.value.trim()){
+      S.checklist.push({id:Date.now(),text:newInp.value.trim(),done:false});
+      saveChecklist(S.checklist);UI.checklistItem='';render();
+    }
+  }},'+'));
+  cc.appendChild(addRow);
+  wrap.appendChild(cc);
+  return wrap;
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 UI.weekOffset = 0;
 UI.loginRole  = 'J';
-(async()=>{ await loadAll(); render(); })();
+(async()=>{
+  await loadAll();
+  S.checklist = loadChecklist();
+  S.notifEnabled = ('Notification' in window && Notification.permission==='granted');
+  render();
+  scheduleUpcomingNotifications();
+})();
 </script>
 </body>
 </html>
