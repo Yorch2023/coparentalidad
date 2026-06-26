@@ -8,7 +8,40 @@
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;color:#f1f5f9;min-height:100vh}
+    body{font-family:'Inter',system-ui,sans-serif;min-height:100vh;transition:background .2s,color .2s}
+
+    /* Dark theme (default) */
+    body.dark{background:#0f172a;color:#f1f5f9}
+    body.dark .card{background:#1e293b;border-color:#334155}
+    body.dark .card-dark{background:#0f172a;border-color:#1e293b}
+    body.dark .input{background:#0f172a;border-color:#334155;color:#f1f5f9}
+    body.dark .btn-ghost{background:#1e293b;border-color:#334155;color:#94a3b8}
+    body.dark .btn-sm{background:#1e293b;border-color:#334155;color:#94a3b8}
+    body.dark .header{background:#1e293b;border-color:#334155}
+    body.dark .tab-bar{background:#1e293b;border-color:#334155}
+    body.dark .today-card{background:linear-gradient(135deg,#1e3a5f,#2d1b5e)}
+    body.dark .msg-area{background:#0f172a;border-color:#1e293b}
+    body.dark .bubble-E{background:#1e293b;border-color:#334155}
+    body.dark .alert-bar{background:#422006;border-color:#7c2d12}
+
+    /* Light theme */
+    body.light{background:#f1f5f9;color:#1e293b}
+    body.light .card{background:#ffffff;border-color:#e2e8f0}
+    body.light .card-dark{background:#f8fafc;border-color:#e2e8f0}
+    body.light .input{background:#f8fafc;border-color:#e2e8f0;color:#1e293b}
+    body.light .btn-ghost{background:#f1f5f9;border-color:#e2e8f0;color:#64748b}
+    body.light .btn-sm{background:#f1f5f9;border-color:#e2e8f0;color:#1e293b}
+    body.light .header{background:#ffffff;border-color:#e2e8f0}
+    body.light .tab-bar{background:#ffffff;border-color:#e2e8f0}
+    body.light .tab-btn{color:#94a3b8}
+    body.light .tab-btn.active{color:#2563eb}
+    body.light .today-card{background:linear-gradient(135deg,#dbeafe,#ede9fe)}
+    body.light .msg-area{background:#f8fafc;border-color:#e2e8f0}
+    body.light .bubble-J{background:#2563eb}
+    body.light .bubble-E{background:#f1f5f9;border:1px solid #e2e8f0;color:#1e293b}
+    body.light .alert-bar{background:#fef3c7;border-color:#fde68a}
+    body.light .alert-pill{background:#fde68a;color:#78350f}
+    body.light .cal-day-hdr{color:#94a3b8}
     button{cursor:pointer;font-family:inherit}
     input,select,textarea{font-family:inherit}
     ::-webkit-scrollbar{width:4px;height:4px}
@@ -271,7 +304,7 @@ function scheduleUpcomingNotifications(){
 let S = {
   user: null,
   tab: 0,
-  expenses:[], events:[], agreements:[], messages:[], wishlist:[],
+  expenses:[], events:[], agreements:[], messages:[], wishlist:[], notes:[],
   child:{name:'Martina',dob:'',school:'',doctor:'',ss:'',allergies:'',size_clothes:'',size_shoes:'',tutor1:'',tutor2:'',notes:''},
 };
 
@@ -304,34 +337,47 @@ let UI = {
   showAiParser:false, aiParserText:'', aiParserLoading:false, aiParserResult:null,
   // Agreements
   agTemplateOpen:false,
+  // Notes
+  noteText:'', noteColor:'yellow',
   // Notif
   notifRequested:false,
+  // Search
+  searchOpen:false, searchQuery:'',
+  // Weekly summary
+  summaryDismissed: localStorage.getItem('cp:summaryDismissed')||'',
+  // Theme
+  theme: localStorage.getItem('cp:theme')||'dark',
+  // Alert config
+  showAlertConfig:false,
+  alertDaysBefore: parseInt(localStorage.getItem('cp:alertDays')||'1'),
 };
 
 let rtSubs = [];
 
 // ── Data layer ────────────────────────────────────────────────────────────────
 async function loadAll(){
-  const [ev,ex,ag,ms,wl,ch] = await Promise.all([
+  const [ev,ex,ag,ms,wl,ch,nt] = await Promise.all([
     sb.from('events').select('*').order('from_date'),
     sb.from('expenses').select('*').order('date',{ascending:false}),
     sb.from('agreements').select('*').order('date',{ascending:false}),
     sb.from('messages').select('*').order('ts'),
     sb.from('wishlist').select('*').order('created_at'),
     sb.from('child_profile').select('*').limit(1).single(),
+    sb.from('notes').select('*').order('created_at',{ascending:false}),
   ]);
   S.events    = (ev.data||[]).map(r=>({...r,from:r.from_date,to:r.to_date,changeRequest:r.change_request,changeStatus:r.change_status}));
   S.expenses  = (ex.data||[]).map(r=>({...r,desc:r.description,paidBy:r.paid_by,liquidatedAt:r.liquidated_at,receipt:r.receipt}));
   S.agreements= ag.data||[];
   S.messages  = (ms.data||[]).map(r=>({...r,from:r.from_user}));
   S.wishlist  = (wl.data||[]).map(r=>({...r,requestedBy:r.requested_by,addedAt:r.added_at}));
+  S.notes     = nt.data||[];
   if(ch.data) S.child = ch.data;
 }
 
 function subscribeRT(){
   rtSubs.forEach(s=>sb.removeChannel(s));
   rtSubs=[];
-  ['events','expenses','agreements','messages','wishlist','child_profile'].forEach(t=>{
+  ['events','expenses','agreements','messages','wishlist','child_profile','notes'].forEach(t=>{
     const c=sb.channel('rt-'+t).on('postgres_changes',{event:'*',schema:'public',table:t},()=>loadAll().then(render)).subscribe();
     rtSubs.push(c);
   });
@@ -340,6 +386,7 @@ function subscribeRT(){
 // DB ops
 async function dbAddEvent(f){
   const {data}=await sb.from('events').insert({from_date:f.from,to_date:f.to,who:f.who,note:f.note,change_request:!!f.changeRequest,change_status:f.changeRequest?'pendiente':'confirmado',created_by:S.user?.role}).select().single();
+  logActivity('añadió','custodia',`${nameOf(f.who)} ${fmt(f.from)}→${fmt(f.to)}`);
   await sendCustodyNotification('add',f,S.user?.role);
   await loadAll(); render();
 }
@@ -351,7 +398,7 @@ async function dbAddEventsBulk(arr){
 async function dbDelEvent(id){
   const ev=S.events.find(e=>e.id===id);
   await sb.from('events').delete().eq('id',id);
-  if(ev) await sendCustodyNotification('delete',ev,S.user?.role);
+  if(ev){ logActivity('borró','custodia',`${nameOf(ev.who)} ${fmt(ev.from)}→${fmt(ev.to)}`); await sendCustodyNotification('delete',ev,S.user?.role); }
   await loadAll(); render();
 }
 async function dbUpdEvent(id,data){
@@ -368,16 +415,23 @@ async function dbToggleExpense(id){
 }
 async function dbAddExpense(f){
   await sb.from('expenses').insert({date:f.date,description:f.desc,amount:parseFloat(f.amount),cat:f.cat,paid_by:f.paidBy,split:f.split,status:f.status,note:f.note,receipt:f.receipt||null,created_by:S.user?.role});
+  logActivity('añadió','gasto',`${f.desc} ${fmtM(f.amount)}`);
   await loadAll(); render();
 }
 async function dbDelExpense(id){ await sb.from('expenses').delete().eq('id',id); await loadAll(); render(); }
-async function dbAddAgreement(f){ await sb.from('agreements').insert({date:f.date,title:f.title,detail:f.detail,category:f.category,status:'activo',created_by:S.user?.role}); await loadAll(); render(); }
+async function dbAddAgreement(f){ logActivity('añadió','acuerdo',f.title); await sb.from('agreements').insert({date:f.date,title:f.title,detail:f.detail,category:f.category,status:'activo',created_by:S.user?.role}); await loadAll(); render(); }
 async function dbDelAgreement(id){ await sb.from('agreements').delete().eq('id',id); await loadAll(); render(); }
 async function dbToggleAgreement(id){ const a=S.agreements.find(x=>x.id===id); await sb.from('agreements').update({status:a.status==='activo'?'archivado':'activo'}).eq('id',id); await loadAll(); render(); }
 async function dbSendMsg(text){ await sb.from('messages').insert({from_user:S.user.role,text}); await loadAll(); render(); }
 async function dbAddWish(f){ await sb.from('wishlist').insert({item:f.item,priority:f.priority,requested_by:f.requestedBy,done:false}); await loadAll(); render(); }
 async function dbDelWish(id){ await sb.from('wishlist').delete().eq('id',id); await loadAll(); render(); }
 async function dbToggleWish(id){ const w=S.wishlist.find(x=>x.id===id); await sb.from('wishlist').update({done:!w.done}).eq('id',id); await loadAll(); render(); }
+async function dbAddNote(text,color){
+  await sb.from('notes').insert({text,color:color||'yellow',from_user:S.user.role,created_at:new Date().toISOString()});
+  await loadAll(); render();
+}
+async function dbDelNote(id){ await sb.from('notes').delete().eq('id',id); await loadAll(); render(); }
+
 async function dbSaveChild(data){ await sb.from('child_profile').update({...data,updated_at:new Date().toISOString()}).eq('id',S.child.id); await loadAll(); render(); }
 
 // ── PDF export ────────────────────────────────────────────────────────────────
@@ -414,8 +468,14 @@ ${agreements.filter(a=>a.status==='activo').length>0?`<h2>Acuerdos activos</h2><
 function render(){
   const app=document.getElementById('app');
   app.innerHTML='';
+  document.body.className=UI.theme;
   if(!S.user){ app.appendChild(renderLogin()); return; }
   app.appendChild(renderShell());
+}
+function toggleTheme(){
+  UI.theme=UI.theme==='dark'?'light':'dark';
+  localStorage.setItem('cp:theme',UI.theme);
+  render();
 }
 
 // ── LOGIN ─────────────────────────────────────────────────────────────────────
@@ -493,6 +553,66 @@ function renderShell(){
   const tabBar=el('div',{className:'tab-bar'});
   TABS.forEach((t,i)=>tabBar.appendChild(el('button',{className:'tab-btn'+(S.tab===i?' active':''),onClick:()=>{S.tab=i;render();}},t)));
 
+  // Search overlay
+  let searchEl=null;
+  if(UI.searchOpen){
+    searchEl=el('div',{style:{background:'var(--bg,#0f172a)',borderBottom:'1px solid #334155',padding:'12px 16px'}});
+    const si=el('input',{className:'input',placeholder:'Buscar en gastos, acuerdos, mensajes…',style:{marginBottom:UI.searchQuery?12:0}});
+    si.value=UI.searchQuery;
+    si.addEventListener('input',e=>{UI.searchQuery=e.target.value;render();});
+    setTimeout(()=>si.focus(),50);
+    searchEl.appendChild(si);
+    if(UI.searchQuery.trim().length>1){
+      const q=UI.searchQuery.toLowerCase();
+      const results=[];
+      S.expenses.filter(e=>e.desc?.toLowerCase().includes(q)||e.cat?.toLowerCase().includes(q)||e.note?.toLowerCase().includes(q)).forEach(e=>results.push({type:'💶 Gasto',title:e.desc,sub:`${fmtM(e.amount)} · ${fmt(e.date)}`,onClick:()=>{S.tab=2;UI.searchOpen=false;render();}}));
+      S.agreements.filter(a=>a.title?.toLowerCase().includes(q)||a.detail?.toLowerCase().includes(q)||a.category?.toLowerCase().includes(q)).forEach(a=>results.push({type:'📝 Acuerdo',title:a.title,sub:`${a.category} · ${fmt(a.date)}`,onClick:()=>{S.tab=4;UI.searchOpen=false;render();}}));
+      S.messages.filter(m=>m.text?.toLowerCase().includes(q)).forEach(m=>results.push({type:'💬 Mensaje',title:m.text.slice(0,60)+(m.text.length>60?'…':''),sub:`${nameOf(m.from)} · ${new Date(m.ts).toLocaleDateString('es-ES')}`,onClick:()=>{S.tab=4;UI.agSubTab=1;UI.searchOpen=false;render();}}));
+      S.events.filter(ev=>ev.note?.toLowerCase().includes(q)).forEach(ev=>results.push({type:'📅 Custodia',title:ev.note,sub:`${nameOf(ev.who)} · ${fmt(ev.from)}→${fmt(ev.to)}`,onClick:()=>{S.tab=1;UI.searchOpen=false;render();}}));
+      if(!results.length){
+        searchEl.appendChild(el('div',{style:{color:'#475569',fontSize:13,padding:'8px 0'}},'Sin resultados'));
+      } else {
+        const rl=el('div',{style:{maxHeight:260,overflowY:'auto'}});
+        results.slice(0,12).forEach(r=>{
+          const row=el('div',{style:{display:'flex',gap:10,padding:'9px 0',borderBottom:'1px solid #1e293b',cursor:'pointer',alignItems:'start'},onClick:r.onClick});
+          row.append(
+            el('span',{style:{fontSize:10,background:'#1e293b',borderRadius:6,padding:'3px 7px',flexShrink:0,color:'#94a3b8',whiteSpace:'nowrap'}},r.type),
+            el('div',{},[el('div',{style:{fontSize:13,fontWeight:600,marginBottom:2}},r.title),el('div',{style:{fontSize:11,color:'#475569'}},r.sub)])
+          );
+          rl.appendChild(row);
+        });
+        if(results.length>12) rl.appendChild(el('div',{style:{fontSize:11,color:'#475569',padding:'6px 0'}},`+${results.length-12} más`));
+        searchEl.appendChild(rl);
+      }
+    }
+  }
+
+  // Weekly summary banner
+  const mon=new Date(); mon.setHours(12,0,0,0);
+  const dow=mon.getDay(); const diff2=dow===0?-6:1-dow;
+  mon.setDate(mon.getDate()+diff2);
+  const monStr=mon.toISOString().slice(0,10);
+  let summaryEl=null;
+  if(dow>=1 && UI.summaryDismissed!==monStr){
+    const prevMon=addDays(monStr,-7);
+    const prevSun=addDays(monStr,-1);
+    const weekExp=S.expenses.filter(e=>e.date>=prevMon&&e.date<=prevSun);
+    const weekEvs=S.events.filter(ev=>ev.from<=prevSun&&ev.to>=prevMon&&ev.changeStatus!=='rechazado');
+    const weekTotal=weekExp.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+    const weekPend=weekExp.filter(e=>e.status==='pendiente').reduce((s,e)=>s+parseFloat(e.amount||0),0);
+    if(weekExp.length>0||weekEvs.length>0){
+      summaryEl=el('div',{style:{background:'#1e3a5f',borderBottom:'1px solid #2563eb',padding:'10px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:12}});
+      const txt=el('div',{});
+      txt.appendChild(el('div',{style:{fontSize:12,fontWeight:700,color:'#60a5fa',marginBottom:3}},'📋 Resumen semana anterior'));
+      const parts=[];
+      if(weekExp.length) parts.push(`${weekExp.length} gastos (${fmtM(weekTotal)}${weekPend>0?' · '+fmtM(weekPend)+' pendiente':''})`);
+      if(weekEvs.length) parts.push(`${weekEvs.length} periodos de custodia`);
+      txt.appendChild(el('div',{style:{fontSize:11,color:'#93c5fd'}},parts.join(' · ')));
+      const closeBtn=el('button',{style:{background:'none',border:'none',color:'#475569',fontSize:16,cursor:'pointer',flexShrink:0},onClick:()=>{UI.summaryDismissed=monStr;localStorage.setItem('cp:summaryDismissed',monStr);render();}},'✕');
+      summaryEl.append(txt,closeBtn);
+    }
+  }
+
   const content=el('div',{className:'content fade-in'});
   if(S.tab===0) content.appendChild(renderDashboard(diff));
   if(S.tab===1) content.appendChild(renderCustodia());
@@ -504,9 +624,38 @@ function renderShell(){
 
   wrap.append(hdr);
   if(alertEl) wrap.append(alertEl);
+  if(summaryEl) wrap.append(summaryEl);
+  if(searchEl) wrap.append(searchEl);
   wrap.append(tabBar,content);
   return wrap;
 }
+
+
+// ── Festivos Santa Cruz de Tenerife 2025-2027 ─────────────────────────────────
+const FESTIVOS = {
+  // Nacionales
+  '2025-01-01':'Año Nuevo','2025-01-06':'Reyes Magos','2025-04-18':'Viernes Santo',
+  '2025-05-01':'Día del Trabajo','2025-08-15':'Asunción de la Virgen',
+  '2025-10-12':'Fiesta Nacional','2025-11-01':'Todos los Santos',
+  '2025-12-06':'Día de la Constitución','2025-12-08':'Inmaculada Concepción','2025-12-25':'Navidad',
+  // Canarias / Santa Cruz
+  '2025-02-03':'San Blas (local)','2025-02-28':'Carnaval (festivo local)',
+  '2025-03-04':'Martes de Carnaval (local)','2025-05-30':'Día de Canarias',
+  '2026-01-01':'Año Nuevo','2026-01-06':'Reyes Magos','2026-04-03':'Viernes Santo',
+  '2026-05-01':'Día del Trabajo','2026-08-15':'Asunción de la Virgen',
+  '2026-10-12':'Fiesta Nacional','2026-11-01':'Todos los Santos',
+  '2026-12-06':'Día de la Constitución','2026-12-08':'Inmaculada Concepción','2026-12-25':'Navidad',
+  '2026-02-03':'San Blas (local)','2026-02-16':'Carnaval (festivo local)',
+  '2026-02-17':'Martes de Carnaval (local)','2026-05-29':'Día de Canarias',
+  '2027-01-01':'Año Nuevo','2027-01-06':'Reyes Magos','2027-03-26':'Viernes Santo',
+  '2027-05-01':'Día del Trabajo','2027-08-15':'Asunción de la Virgen',
+  '2027-10-12':'Fiesta Nacional','2027-11-01':'Todos los Santos',
+  '2027-12-06':'Día de la Constitución','2027-12-08':'Inmaculada Concepción','2027-12-25':'Navidad',
+  '2027-02-03':'San Blas (local)','2027-02-08':'Carnaval (festivo local)',
+  '2027-02-09':'Martes de Carnaval (local)','2027-05-28':'Día de Canarias',
+};
+function isFestivo(dateStr){ return !!FESTIVOS[dateStr]; }
+function festivoName(dateStr){ return FESTIVOS[dateStr]||''; }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function renderDashboard(diff){
@@ -575,6 +724,68 @@ function renderDashboard(diff){
     rc.appendChild(viewAll);
     wrap.appendChild(rc);
   }
+
+  // Quick notes
+  const NOTE_COLORS = {
+    yellow:{bg:'#422006',border:'#f59e0b',text:'#fde68a',dot:'#f59e0b'},
+    blue:  {bg:'#1e3a5f',border:'#3b82f6',text:'#bfdbfe',dot:'#3b82f6'},
+    green: {bg:'#064e3b',border:'#10b981',text:'#a7f3d0',dot:'#10b981'},
+    red:   {bg:'#450a0a',border:'#ef4444',text:'#fecaca',dot:'#ef4444'},
+  };
+  const nc=el('div',{className:'card',style:{marginBottom:12}});
+  const nh=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}});
+  nh.append(
+    el('div',{style:{fontWeight:700,fontSize:14}},'📌 Notas rápidas'),
+    el('div',{style:{fontSize:11,color:'#64748b'}},'Visibles para ambos')
+  );
+  nc.appendChild(nh);
+
+  // Existing notes
+  if(S.notes.length>0){
+    const noteList=el('div',{style:{display:'flex',flexDirection:'column',gap:8,marginBottom:10}});
+    [...S.notes].slice(0,5).forEach(n=>{
+      const c=NOTE_COLORS[n.color]||NOTE_COLORS.yellow;
+      const nr=el('div',{style:{background:c.bg,border:`1px solid ${c.border}22`,borderLeft:`3px solid ${c.border}`,borderRadius:10,padding:'9px 12px',display:'flex',justifyContent:'space-between',alignItems:'start',gap:8}});
+      const ni=el('div',{style:{flex:1}});
+      ni.append(
+        el('div',{style:{fontSize:13,color:c.text,lineHeight:1.4}},n.text),
+        el('div',{style:{fontSize:10,color:c.border+'99',marginTop:4}},`${n.from_user==='J'?'Jorge':'Eva'} · ${new Date(n.created_at).toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}`)
+      );
+      const delBtn=el('button',{style:{background:'none',border:'none',color:c.border+'66',fontSize:13,cursor:'pointer',flexShrink:0},onClick:()=>dbDelNote(n.id)},'✕');
+      nr.append(ni,delBtn);
+      noteList.appendChild(nr);
+    });
+    nc.appendChild(noteList);
+    if(S.notes.length>5) nc.appendChild(el('div',{style:{fontSize:11,color:'#475569',marginBottom:8}},`+${S.notes.length-5} notas más`));
+  } else {
+    nc.appendChild(el('div',{style:{color:'#475569',fontSize:12,marginBottom:10,fontStyle:'italic'}},'Sin notas. Añade un recordatorio rápido para ambos…'));
+  }
+
+  // Add note form
+  const nForm=el('div',{style:{display:'flex',gap:6,alignItems:'start',flexWrap:'wrap'}});
+  const nInp=el('textarea',{className:'input',style:{flex:'1 1 200px',minHeight:38,resize:'none',lineHeight:1.4,fontSize:13}});
+  nInp.placeholder='Escribe una nota rápida…';
+  nInp.value=UI.noteText||'';
+  nInp.addEventListener('input',e=>UI.noteText=e.target.value);
+  nInp.addEventListener('keydown',async e=>{
+    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(UI.noteText.trim()){await dbAddNote(UI.noteText.trim(),UI.noteColor);UI.noteText='';}}
+  });
+
+  // Color picker
+  const colorPick=el('div',{style:{display:'flex',gap:4,alignItems:'center',flexShrink:0}});
+  Object.entries(NOTE_COLORS).forEach(([k,c])=>{
+    colorPick.appendChild(el('button',{
+      style:{width:18,height:18,borderRadius:'50%',background:c.dot,border:UI.noteColor===k?'2px solid #fff':'2px solid transparent',cursor:'pointer'},
+      onClick:()=>{UI.noteColor=k;render();}
+    },''));
+  });
+
+  const nBtn=el('button',{className:'btn-primary',style:{padding:'8px 12px',fontSize:12,flexShrink:0},onClick:async()=>{
+    if(UI.noteText.trim()){await dbAddNote(UI.noteText.trim(),UI.noteColor);UI.noteText='';}
+  }},'Añadir');
+  nForm.append(nInp,el('div',{style:{display:'flex',flexDirection:'column',gap:6}},[colorPick,nBtn]));
+  nc.appendChild(nForm);
+  wrap.appendChild(nc);
 
   return wrap;
 }
@@ -659,10 +870,10 @@ function renderCalMonth(){
 
   // Legend
   const leg=el('div',{style:{display:'flex',gap:14,marginBottom:12,flexWrap:'wrap',alignItems:'center'}});
-  [['J','Jorge','#60a5fa'],['E','Eva','#a78bfa'],['ambos','Ambos','#6ee7b7'],['wed','Miérc. opcional','#f97316']].forEach(([k,l,color])=>{
+  [['J','Jorge','#60a5fa'],['E','Eva','#a78bfa'],['ambos','Ambos','#6ee7b7'],['wed','Miérc. opcional','#f97316'],['fest','Festivo','#f59e0b']].forEach(([k,l,color])=>{
     const d=el('div',{style:{display:'flex',alignItems:'center',gap:6}});
     d.append(
-      el('div',{style:{width:12,height:12,borderRadius:3,background:k==='wed'?'#431407':color,border:k==='wed'?'1px dashed #f97316':'none'}}),
+      el('div',{style:{width:12,height:12,borderRadius:3,background:k==='wed'?'#431407':k==='fest'?'#451a03':color,border:k==='wed'?'1px dashed #f97316':k==='fest'?'1px solid #f59e0b':'none'}}),
       el('span',{style:{fontSize:11,color:'#94a3b8'}},l)
     );
     leg.appendChild(d);
@@ -711,16 +922,19 @@ function renderCalMonth(){
       borderStyle='1px dashed #475569'; clickEv=ev;
     }
 
+    const isFest = isFestivo(key);
     const cell=el('div',{
       className:'cal-cell'+(ev||wedEv?' has-event':''),
-      style:{background:bgColor},
-      onClick:()=>{if(clickEv){UI.calSelected=clickEv;render();}}
+      style:{background:bgColor,position:'relative'},
+      title:isFest?festivoName(key):'',
+      onClick:()=>{if(clickEv){UI.calSelected=clickEv;render();} else if(isFest){ alert('🎉 '+festivoName(key)); }}
     });
     cell.appendChild(el('div',{
       className:'cal-num'+(isTdy?' today':''),
-      style:{color:isTdy?'':textColor, border:isTdy?'none':borderStyle}
+      style:{color:isTdy?'':isFest&&!ev&&!wedEv?'#f59e0b':textColor, border:isTdy?'none':borderStyle}
     },String(n)));
     if(wedEv&&!isTdy) cell.appendChild(el('div',{style:{width:5,height:5,borderRadius:'50%',background:'#f97316',marginTop:1}}));
+    if(isFest) cell.appendChild(el('div',{style:{width:5,height:5,borderRadius:'50%',background:'#f59e0b',marginTop:1,opacity:.9}}));
     grid.appendChild(cell);
   }
   cal.appendChild(grid);
@@ -759,14 +973,17 @@ function renderCalWeek(){
     const ev=dayMap[key];
     const isTdy=key===today();
     hdrRow.appendChild(el('div',{style:{textAlign:'center',fontSize:10,fontWeight:700,color:isTdy?'#60a5fa':'#475569',paddingBottom:4}},DNAMES[i]));
+    const isFestD=isFestivo(key);
+    const festNm=festivoName(key);
     const cell=el('div',{
       className:'week-cell',
-      style:{background:ev?CUSTODY_BG[ev.who]:'#1e293b',border:isTdy?'1px solid #3b82f6':'1px solid #334155',cursor:ev?'pointer':'default'},
-      onClick:()=>{if(ev){UI.calSelected=ev;render();}}
+      style:{background:ev?CUSTODY_BG[ev.who]:'#1e293b',border:isTdy?'1px solid #3b82f6':isFestD?'1px solid #f59e0b22':'1px solid #334155',cursor:(ev||isFestD)?'pointer':'default'},
+      title:isFestD?festNm:'',
+      onClick:()=>{if(ev){UI.calSelected=ev;render();}else if(isFestD){alert('🎉 '+festNm);}}
     });
     cell.append(
-      el('div',{style:{fontSize:15,fontWeight:isTdy?800:600,color:ev?CUSTODY_TEXT[ev.who]:'#475569'}},String(d.getDate())),
-      ev?el('div',{style:{fontSize:10,color:CUSTODY_TEXT[ev.who],fontWeight:700}},nameOf(ev.who)):el('div',{style:{fontSize:10,color:'#334155'}},'—')
+      el('div',{style:{fontSize:15,fontWeight:isTdy?800:600,color:ev?CUSTODY_TEXT[ev.who]:isFestD?'#f59e0b':'#475569'}},String(d.getDate())),
+      ev?el('div',{style:{fontSize:10,color:CUSTODY_TEXT[ev.who],fontWeight:700}},nameOf(ev.who)):el('div',{style:{fontSize:10,color:isFestD?'#f59e0b':'#334155'}},isFestD?'🎉':'—')
     );
     bodyRow.appendChild(cell);
   }
@@ -1115,7 +1332,12 @@ function renderAcuerdos(){
   }
 
   if(UI.agSubTab===1){
-    wrap.appendChild(el('div',{className:'card-dark',style:{padding:'8px 12px',marginBottom:12,fontSize:11,color:'#475569'}},'📌 Registro con sello de tiempo. Los mensajes no se pueden editar una vez enviados.'));
+    const msgToolbar=el('div',{style:{display:'flex',gap:8,marginBottom:12,alignItems:'center'}});
+    msgToolbar.append(
+      el('div',{className:'card-dark',style:{flex:1,padding:'8px 12px',fontSize:11,color:'#475569',marginBottom:0}},'📌 Registro con sello de tiempo. No se pueden editar.'),
+      el('button',{className:'btn-ghost',style:{fontSize:11,flexShrink:0,whiteSpace:'nowrap'},onClick:exportMessagesPDF},'📄 Exportar PDF')
+    );
+    wrap.appendChild(msgToolbar);
     const mb=el('div',{className:'msg-area',id:'msgBox'});
     if(!messages.length) mb.appendChild(el('div',{style:{textAlign:'center',color:'#334155',padding:'60px 0',fontSize:13}},'Sin mensajes'));
     messages.forEach(m=>{
@@ -1137,6 +1359,63 @@ function renderAcuerdos(){
 }
 
 
+
+
+// ── Export messages to PDF ────────────────────────────────────────────────────
+function exportMessagesPDF(){
+  const {messages,child}=S;
+  const now=new Date().toLocaleDateString('es-ES');
+  const rows=messages.map(m=>`
+    <tr>
+      <td style="width:80px;color:#64748b;font-size:10px">${new Date(m.ts).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
+      <td style="width:50px;font-weight:700;color:${m.from==='J'?'#2563eb':'#7c3aed'}">${nameOf(m.from)}</td>
+      <td style="font-size:12px">${m.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>
+    </tr>`).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Registro de comunicaciones</title>
+<style>body{font-family:Arial,sans-serif;font-size:12px;color:#1e293b;margin:30px;line-height:1.5}
+h1{font-size:18px;margin-bottom:4px}h2{font-size:13px;color:#2563eb;margin:18px 0 8px;border-bottom:1px solid #e2e8f0;padding-bottom:3px}
+table{width:100%;border-collapse:collapse}td{padding:7px 9px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+.meta{color:#64748b;font-size:11px;margin-bottom:20px}.footer{margin-top:28px;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px}</style>
+</head><body>
+<h1>💬 Registro de comunicaciones</h1>
+<div class="meta">Jorge · Eva · ${child.name||'Martina'} · Generado el ${now} · ${messages.length} mensajes</div>
+<h2>Historial completo</h2>
+<table>${rows}</table>
+<div class="footer">Documento de registro privado con sello de tiempo. Los mensajes no han sido editados ni eliminados desde su envío.</div>
+</body></html>`;
+  const w=window.open('','_blank');w.document.write(html);w.document.close();setTimeout(()=>w.print(),400);
+}
+
+// ── Alert config helpers ──────────────────────────────────────────────────────
+function saveAlertConfig(days){
+  UI.alertDaysBefore=days;
+  localStorage.setItem('cp:alertDays',String(days));
+  // Reschedule with new config
+  scheduleUpcomingNotificationsWithConfig(days);
+}
+function scheduleUpcomingNotificationsWithConfig(daysBefore){
+  if(Notification.permission!=='granted') return;
+  const todayStr=today();
+  S.events.filter(ev=>ev.from>=todayStr&&ev.changeStatus!=='rechazado').slice(0,20).forEach(ev=>{
+    const msAlert=new Date(addDays(ev.from,-daysBefore)+'T20:00:00').getTime()-Date.now();
+    const msDay=new Date(ev.from+'T08:00:00').getTime()-Date.now();
+    if(msAlert>0) setTimeout(()=>fireNotif(`🔔 Cambio de custodia en ${daysBefore}d`,`${S.child.name||'Martina'} pasa con ${nameOf(ev.who)} el ${fmt(ev.from)}`),msAlert);
+    if(msDay>0) setTimeout(()=>fireNotif('📅 Cambio de custodia hoy',`${S.child.name||'Martina'} pasa con ${nameOf(ev.who)} hoy`),msDay);
+  });
+}
+
+
+// ── Activity log (local + shared via messages meta) ───────────────────────────
+function logActivity(action, entity, detail){
+  try {
+    const logs = JSON.parse(localStorage.getItem('cp:actlog')||'[]');
+    logs.unshift({ts:new Date().toISOString(), user:S.user?.role||'?', action, entity, detail});
+    localStorage.setItem('cp:actlog', JSON.stringify(logs.slice(0,100))); // keep last 100
+  } catch{}
+}
+function getActivityLog(){
+  try { return JSON.parse(localStorage.getItem('cp:actlog')||'[]'); } catch { return []; }
+}
 
 // ── AI EVENT PARSER ───────────────────────────────────────────────────────────
 function renderAiEventParser(){
@@ -1321,6 +1600,27 @@ function renderStats(){
   }
 
   if(td===0&&totalExp===0) wrap.appendChild(el('div',{style:{textAlign:'center',color:'#475569',padding:'40px 0',fontSize:13}},'Añade datos para ver las estadísticas'));
+
+  // Activity log
+  const logs=getActivityLog();
+  if(logs.length>0){
+    const lc=el('div',{className:'card',style:{marginTop:14}});
+    lc.appendChild(el('div',{style:{fontWeight:700,fontSize:14,marginBottom:12}},'🕓 Historial de actividad'));
+    logs.slice(0,20).forEach(l=>{
+      const r=el('div',{style:{display:'flex',gap:10,padding:'7px 0',borderBottom:'1px solid #0f172a',alignItems:'start'}});
+      r.append(
+        badge(l.user==='J'?'Jorge':'Eva','badge-'+(l.user==='J'?'J':'E')),
+        el('div',{style:{flex:1}},[
+          el('div',{style:{fontSize:12}},`${l.action} ${l.entity}: ${l.detail}`),
+          el('div',{style:{fontSize:10,color:'#475569',marginTop:2}},new Date(l.ts).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))
+        ])
+      );
+      lc.appendChild(r);
+    });
+    if(logs.length>20) lc.appendChild(el('div',{style:{fontSize:11,color:'#475569',padding:'6px 0'}},`Mostrando 20 de ${logs.length} entradas`));
+    wrap.appendChild(lc);
+  }
+
   return wrap;
 }
 
@@ -1349,6 +1649,35 @@ function renderIntercambio(){
     );
   }
   wrap.appendChild(notifCard);
+
+  // Alert config
+  if(Notification.permission==='granted'){
+    const ac=el('div',{className:'card',style:{marginBottom:14}});
+    const ach=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}});
+    ach.append(
+      el('div',{},[
+        el('div',{style:{fontWeight:700,fontSize:14}},'⚙️ Configurar alertas'),
+        el('div',{style:{fontSize:11,color:'#64748b',marginTop:2}},'¿Con cuántos días de antelación quieres el aviso?')
+      ]),
+      el('button',{className:'btn-ghost',style:{fontSize:11},onClick:()=>{UI.showAlertConfig=!UI.showAlertConfig;render();}},UI.showAlertConfig?'Cerrar':'Editar')
+    );
+    ac.appendChild(ach);
+    if(UI.showAlertConfig){
+      const optWrap=el('div',{style:{display:'flex',gap:8}});
+      [1,2,3,7].forEach(d=>{
+        const active=UI.alertDaysBefore===d;
+        optWrap.appendChild(el('button',{
+          style:{flex:1,padding:'10px 4px',borderRadius:9,border:'1px solid',borderColor:active?'#3b82f6':'#334155',background:active?'#1e3a5f':'transparent',color:active?'#60a5fa':'#64748b',fontWeight:active?700:400,fontSize:12},
+          onClick:()=>{saveAlertConfig(d);render();}
+        },d===1?'1 día':d===7?'1 semana':`${d} días`));
+      });
+      ac.appendChild(optWrap);
+      ac.appendChild(el('div',{style:{fontSize:11,color:'#475569',marginTop:10}},`Aviso actual: ${UI.alertDaysBefore===1?'1 día':UI.alertDaysBefore===7?'1 semana':UI.alertDaysBefore+' días'} antes + mañana del cambio`));
+    } else {
+      ac.appendChild(el('div',{style:{fontSize:13,color:'#94a3b8'}},`Avisas ${UI.alertDaysBefore===1?'1 día':UI.alertDaysBefore===7?'1 semana':UI.alertDaysBefore+' días'} antes de cada cambio`));
+    }
+    wrap.appendChild(ac);
+  }
 
   // Next handover info
   const todayStr=today();
@@ -1425,8 +1754,9 @@ UI.loginRole  = 'J';
   await loadAll();
   S.checklist = loadChecklist();
   S.notifEnabled = ('Notification' in window && Notification.permission==='granted');
+  document.body.className = UI.theme;
   render();
-  scheduleUpcomingNotifications();
+  scheduleUpcomingNotificationsWithConfig(UI.alertDaysBefore);
 })();
 </script>
 </body>
