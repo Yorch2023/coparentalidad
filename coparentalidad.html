@@ -1461,7 +1461,7 @@ function renderAiEventParser(){
         const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:200,messages:[{role:'user',content:prompt}]})});
         const data=await resp.json();
         const text=data.content?.[0]?.text||'';
-        const clean=text.replace(/```json|```/g,'').trim();
+        const clean=text.split('```json').join('').split('```').join('').trim();
         UI.aiParserResult=JSON.parse(clean);
       }catch(e){
         UI.aiParserResult={who:'J',from:today(),to:today(),note:'Error al interpretar — edita manualmente'};
