@@ -1457,7 +1457,7 @@ function renderAiEventParser(){
       UI.aiParserLoading=true;render();
       try{
         const yr=new Date().getFullYear();
-        const prompt=`Hoy es ${today()}. Analiza este texto sobre un plan de custodia y devuelve SOLO un objeto JSON con estos campos exactos: who (J=Jorge, E=Eva, ambos), from (YYYY-MM-DD), to (YYYY-MM-DD), note (string breve). Texto: "${UI.aiParserText}". Responde SOLO con el JSON, sin explicación ni markdown.`;
+        const prompt='Hoy es '+today()+'. Analiza este texto sobre un plan de custodia y devuelve SOLO un objeto JSON con estos campos exactos: who (J=Jorge, E=Eva, ambos), from (YYYY-MM-DD), to (YYYY-MM-DD), note (string breve). Texto: "'+UI.aiParserText+'". Responde SOLO con el JSON, sin explicacion ni markdown.';
         const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:200,messages:[{role:'user',content:prompt}]})});
         const data=await resp.json();
         const text=data.content?.[0]?.text||'';
