@@ -519,7 +519,7 @@ function renderShell(){
   // Alerts
   const alerts=[];
   S.expenses.filter(e=>e.status==='pendiente').forEach(e=>{const age=Math.round((Date.now()-new Date(e.date+'T12:00:00'))/86400000);if(age>=14)alerts.push(`"${e.desc}" — ${age}d pendiente`);});
-  S.events.forEach(ev=>{const d=daysUntil(ev.from);if(d>=0&&d<=2)alerts.push(`Cambio de custodia ${d===0?'HOY':`en ${d}d`} → ${nameOf(ev.who)}`);});
+  S.events.forEach(ev=>{const d=daysUntil(ev.from);if(d>=0&&d<=2){const cuando=d===0?'HOY':'en '+d+'d';alerts.push(`Cambio de custodia ${cuando} → ${nameOf(ev.who)}`);}});
   S.events.filter(ev=>ev.changeStatus==='pendiente').forEach(()=>alerts.push('Solicitud de cambio pendiente de confirmar'));
 
   // Header
