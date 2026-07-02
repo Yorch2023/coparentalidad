@@ -310,8 +310,8 @@ function scheduleUpcomingNotifications(){
   S.events.filter(ev=>ev.from>=todayStr&&ev.changeStatus!=='rechazado').slice(0,10).forEach(ev=>{
     const msDay = new Date(ev.from+'T08:00:00').getTime()-Date.now();
     const msDayBefore = new Date(addDays(ev.from,-1)+'T20:00:00').getTime()-Date.now();
-    if(msDayBefore>0) setTimeout(()=>fireNotif('🔔 Cambio de custodia mañana', S.child.name||'Martina'+' pasa con '+(nameOf(ev.who))+' mañana'), msDayBefore);
-    if(msDay>0) setTimeout(()=>fireNotif('📅 Cambio de custodia hoy', S.child.name||'Martina'+' pasa con '+(nameOf(ev.who))+' hoy'), msDay);
+    if(msDayBefore>0) setTimeout(()=>fireNotif('🔔 Cambio de custodia mañana', (S.child.name||'Martina')+' pasa con '+nameOf(ev.who)+' mañana'), msDayBefore);
+    if(msDay>0) setTimeout(()=>fireNotif('📅 Cambio de custodia hoy', (S.child.name||'Martina')+' pasa con '+nameOf(ev.who)+' hoy'), msDay);
   });
 }
 
@@ -539,7 +539,12 @@ function renderShell(){
   // Alerts
   const alerts=[];
   S.expenses.filter(e=>e.status==='pendiente').forEach(e=>{const age=Math.round((Date.now()-new Date(e.date+'T12:00:00'))/86400000);if(age>=14)alerts.push(`"${e.desc}" — ${age}d pendiente`);});
-  S.events.forEach(ev=>{const d=daysUntil(ev.from);if(d>=0&&d<=2)alerts.push(`Cambio de custodia ${d===0?'HOY':`en ${d}d`} → ${nameOf(ev.who)}`);});
+  const custodyOn = ds => { const e=S.events.find(ev=>ev.from<=ds&&ev.to>=ds&&ev.changeStatus!=='rechazado'); return e?e.who:null; };
+  S.events.forEach(ev=>{
+    if(ev.changeStatus==='rechazado') return;
+    const d=daysUntil(ev.from);
+    if(d>=0&&d<=2&&custodyOn(addDays(ev.from,-1))!==ev.who) alerts.push('Cambio de custodia '+(d===0?'HOY':'en '+d+'d')+' → '+nameOf(ev.who));
+  });
   S.events.filter(ev=>ev.changeStatus==='pendiente').forEach(()=>alerts.push('Solicitud de cambio pendiente de confirmar'));
 
   // Header
@@ -1416,11 +1421,12 @@ function saveAlertConfig(days){
 function scheduleUpcomingNotificationsWithConfig(daysBefore){
   if(Notification.permission!=='granted') return;
   const todayStr=today();
-  S.events.filter(ev=>ev.from>=todayStr&&ev.changeStatus!=='rechazado').slice(0,20).forEach(ev=>{
+  const custodyOnDay = dateStr => { const e=S.events.find(x=>x.from<=dateStr&&x.to>=dateStr&&x.changeStatus!=='rechazado'); return e?e.who:null; };
+  S.events.filter(ev=>ev.from>=todayStr&&ev.changeStatus!=='rechazado'&&custodyOnDay(addDays(ev.from,-1))!==ev.who).slice(0,20).forEach(ev=>{
     const msAlert=new Date(addDays(ev.from,-daysBefore)+'T20:00:00').getTime()-Date.now();
     const msDay=new Date(ev.from+'T08:00:00').getTime()-Date.now();
-    if(msAlert>0) setTimeout(()=>fireNotif(`🔔 Cambio de custodia en ${daysBefore}d`,`${S.child.name||'Martina'} pasa con ${nameOf(ev.who)} el ${fmt(ev.from)}`),msAlert);
-    if(msDay>0) setTimeout(()=>fireNotif('📅 Cambio de custodia hoy',`${S.child.name||'Martina'} pasa con ${nameOf(ev.who)} hoy`),msDay);
+    if(msAlert>0) setTimeout(()=>fireNotif('🔔 Cambio de custodia en '+daysBefore+'d',(S.child.name||'Martina')+' pasa con '+nameOf(ev.who)+' el '+fmt(ev.from)),msAlert);
+    if(msDay>0) setTimeout(()=>fireNotif('📅 Cambio de custodia hoy',(S.child.name||'Martina')+' pasa con '+nameOf(ev.who)+' hoy'),msDay);
   });
 }
 
