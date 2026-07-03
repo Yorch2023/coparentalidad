@@ -501,29 +501,66 @@ function toggleTheme(){
 // ── LOGIN ─────────────────────────────────────────────────────────────────────
 function renderLogin(){
   const wrap=el('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',background:'#0f172a'}});
-  const box=el('div',{className:'card fade-in',style:{width:320,textAlign:'center',padding:32,margin:16}});
+  const box=el('div',{className:'card fade-in',style:{width:340,padding:32,margin:16}});
   box.append(
-    el('div',{style:{fontSize:36,marginBottom:16}},'🤝'),
-    el('div',{style:{fontWeight:800,fontSize:22,marginBottom:4,letterSpacing:-0.5}},'Coparentalidad'),
-    el('div',{style:{color:'#64748b',fontSize:13,marginBottom:28}},'Jorge · Eva · Martina'),
-    el('div',{className:'label',style:{marginBottom:12}},'¿Quién eres?'),
+    el('div',{style:{fontSize:36,marginBottom:16,textAlign:'center'}},'🤝'),
+    el('div',{style:{fontWeight:800,fontSize:22,marginBottom:4,letterSpacing:-0.5,textAlign:'center'}},'Coparentalidad'),
+    el('div',{style:{color:'#64748b',fontSize:13,marginBottom:28,textAlign:'center'}},'Acceso privado · Jorge y Eva'),
   );
-  const btns=el('div',{style:{display:'flex',gap:10,marginBottom:24}});
-  ['J','E'].forEach(r=>{
-    const active=UI.loginRole===r;
-    const b=el('button',{
-      style:{flex:1,padding:14,borderRadius:12,border:'2px solid',borderColor:active?CUSTODY_TEXT[r]:'#334155',background:active?CUSTODY_BG[r]:'transparent',color:active?CUSTODY_TEXT[r]:'#64748b',fontWeight:700,fontSize:15,transition:'all .15s'},
-      onClick:()=>{UI.loginRole=r;render();}
-    },r==='J'?'👨 Jorge':'👩 Eva');
-    btns.appendChild(b);
-  });
-  box.appendChild(btns);
-  box.appendChild(el('button',{
-    className:'btn-primary',style:{width:'100%',padding:13,fontSize:14},
-    onClick:()=>{ S.user={role:UI.loginRole,name:nameOf(UI.loginRole)}; render(); subscribeRT(); }
-  },'Entrar'));
+
+  const emailWrap=el('div',{style:{marginBottom:12}});
+  emailWrap.appendChild(lbl('Email'));
+  const emailInp=el('input',{type:'email',className:'input',placeholder:'tu@email.com',autocomplete:'email'});
+  emailInp.value=UI.loginEmail||'';
+  emailInp.addEventListener('input',e=>UI.loginEmail=e.target.value);
+  emailWrap.appendChild(emailInp);
+
+  const passWrap=el('div',{style:{marginBottom:20}});
+  passWrap.appendChild(lbl('Contraseña'));
+  const passInp=el('input',{type:'password',className:'input',placeholder:'••••••••',autocomplete:'current-password'});
+  passInp.addEventListener('input',e=>UI.loginPass=e.target.value);
+  passInp.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+  passWrap.appendChild(passInp);
+
+  const errDiv=el('div',{id:'loginErr',style:{color:'#fca5a5',fontSize:12,marginBottom:12,minHeight:16,textAlign:'center'}},UI.loginError||'');
+
+  const loginBtn=el('button',{className:'btn-primary',style:{width:'100%',padding:13,fontSize:14},id:'loginBtn',onClick:doLogin},'Entrar');
+
+  async function doLogin(){
+    const btn=document.getElementById('loginBtn');
+    const err=document.getElementById('loginErr');
+    if(!UI.loginEmail||!UI.loginPass){ err.textContent='Introduce email y contraseña'; return; }
+    btn.disabled=true; btn.textContent='Entrando…'; err.textContent='';
+    try {
+      const {data,error} = await sb.auth.signInWithPassword({email:UI.loginEmail.trim(),password:UI.loginPass});
+      if(error){ err.textContent='Email o contraseña incorrectos'; btn.disabled=false; btn.textContent='Entrar'; return; }
+      await onAuthenticated(data.user);
+    } catch(e){
+      err.textContent='Error de conexión. Inténtalo de nuevo.';
+      btn.disabled=false; btn.textContent='Entrar';
+    }
+  }
+
+  box.append(emailWrap,passWrap,errDiv,loginBtn);
+  box.appendChild(el('div',{style:{fontSize:11,color:'#475569',marginTop:16,textAlign:'center',lineHeight:1.5}},'Cada usuario accede con su propia cuenta verificada. Los mensajes quedan ligados a la identidad real y no pueden editarse ni borrarse.'));
   wrap.appendChild(box);
   return wrap;
+}
+
+async function onAuthenticated(authUser){
+  // Fetch role from profiles
+  const {data:prof} = await sb.from('profiles').select('*').eq('id',authUser.id).single();
+  if(!prof){
+    alert('Tu usuario no tiene perfil asignado. Contacta con el administrador.');
+    await sb.auth.signOut();
+    return;
+  }
+  S.user = {role:prof.role, name:prof.name, email:authUser.email, uid:authUser.id};
+  UI.loginPass='';
+  await loadAll();
+  render();
+  subscribeRT();
+  try{ scheduleUpcomingNotificationsWithConfig(UI.alertDaysBefore); }catch(e){}
 }
 
 // ── SHELL ─────────────────────────────────────────────────────────────────────
@@ -559,7 +596,7 @@ function renderShell(){
   if(Math.abs(diff)>0.01) hR.appendChild(badge(diff>0?`Eva debe ${fmtM(diff)}`:`Jorge debe ${fmtM(Math.abs(diff))}`,'badge-warn'));
   hR.append(
     el('button',{className:'btn-ghost',style:{fontSize:11},onClick:exportPDF},'📄 PDF'),
-    el('button',{className:'btn-ghost',style:{fontSize:11,padding:'6px 10px'},onClick:()=>{S.user=null;rtSubs.forEach(s=>sb.removeChannel(s));render();}},'Salir')
+    el('button',{className:'btn-ghost',style:{fontSize:11,padding:'6px 10px'},onClick:async()=>{await sb.auth.signOut();S.user=null;rtSubs.forEach(s=>sb.removeChannel(s));render();}},'Salir')
   );
   hdr.append(hL,hR);
 
@@ -1776,7 +1813,7 @@ function renderIntercambio(){
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 UI.weekOffset = 0;
-UI.loginRole  = 'J';
+UI.loginEmail = ''; UI.loginPass = ''; UI.loginError = '';
 // Timeout fallback: if still loading after 10s, force render
 setTimeout(()=>{
   const app=document.getElementById('app');
@@ -1792,12 +1829,18 @@ setTimeout(()=>{
 },10000);
 
 (async()=>{
-  try{ await loadAll(); } catch(e){ console.error('loadAll failed:',e); }
   S.checklist = loadChecklist();
   S.notifEnabled = ('Notification' in window && Notification.permission==='granted');
   document.body.className = UI.theme;
-  render();
-  try{ scheduleUpcomingNotificationsWithConfig(UI.alertDaysBefore); }catch(e){}
+  // Check existing session
+  try {
+    const {data:{session}} = await sb.auth.getSession();
+    if(session && session.user){
+      await onAuthenticated(session.user);
+      return;
+    }
+  } catch(e){ console.warn('session check failed:', e); }
+  render(); // shows login
 })();
 </script>
 </body>
