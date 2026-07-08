@@ -168,7 +168,7 @@ const today  = () => new Date().toISOString().slice(0,10);
 const fmt    = d => d ? d.slice(0,10).split('-').reverse().join('/') : '';
 const fmtM   = n => Number(n||0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
 const daysBetween = (a,b) => Math.max(0,Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000)+1);
-const daysUntil   = d => Math.ceil((new Date(d+'T12:00:00')-new Date())/86400000);
+const daysUntil   = d => Math.round((new Date(d+'T12:00:00')-new Date(today()+'T12:00:00'))/86400000);
 const addDays     = (d,n) => { const dt=new Date(d+'T12:00:00'); dt.setDate(dt.getDate()+n); return dt.toISOString().slice(0,10); };
 const nameOf      = r => r==='J'?'Jorge':r==='E'?'Eva':'Ambos';
 
@@ -260,6 +260,27 @@ async function sendCustodyNotification(action, event, fromUser){
   } catch(e) {
     console.warn('Error enviando email:', e);
   }
+}
+
+// ── Generic change notification ───────────────────────────────────────────────
+async function notifyOther(tipo, detalle, requiereAccion){
+  if(!NOTIFICACIONES_ACTIVAS) return;
+  if(!S.user) return;
+  const toEmail = S.user.role==='J' ? EMAIL_EVA : EMAIL_JORGE;
+  if(!toEmail) return;
+  const params = {
+    to_email: toEmail,
+    from_name: S.user.name,
+    action: tipo,
+    who: detalle,
+    from_date: '',
+    to_date: '',
+    note: requiereAccion ? 'Requiere tu revisión/aprobación en la app' : 'Informativo',
+    days: '',
+    app_url: window.location.origin + window.location.pathname,
+  };
+  try { await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, params); }
+  catch(e){ console.warn('Email error:', e); }
 }
 
 // ── Agreement templates ───────────────────────────────────────────────────────
@@ -431,28 +452,31 @@ async function dbToggleExpense(id){
   const e=S.expenses.find(x=>x.id===id);
   const ns=e.status==='pendiente'?'liquidado':'pendiente';
   await sb.from('expenses').update({status:ns,liquidated_at:ns==='liquidado'?new Date().toISOString():null}).eq('id',id);
+  if(ns==='liquidado') notifyOther('gasto liquidado', e.desc+' ('+fmtM(e.amount)+')', false);
   await loadAll(); render();
 }
 async function dbAddExpense(f){
   await sb.from('expenses').insert({date:f.date,description:f.desc,amount:parseFloat(f.amount),cat:f.cat,paid_by:f.paidBy,split:f.split,status:f.status,note:f.note,receipt:f.receipt||null,created_by:S.user?.role});
-  logActivity('añadió','gasto',f.desc+' '+(fmtM(f.amount))+'');
+  logActivity('añadió','gasto',f.desc+' '+fmtM(f.amount));
+  notifyOther('nuevo gasto', f.desc+' ('+fmtM(f.amount)+', paga '+nameOf(f.paidBy)+')', true);
   await loadAll(); render();
 }
 async function dbDelExpense(id){ await sb.from('expenses').delete().eq('id',id); await loadAll(); render(); }
-async function dbAddAgreement(f){ logActivity('añadió','acuerdo',f.title); await sb.from('agreements').insert({date:f.date,title:f.title,detail:f.detail,category:f.category,status:'activo',created_by:S.user?.role}); await loadAll(); render(); }
+async function dbAddAgreement(f){ logActivity('añadió','acuerdo',f.title); await sb.from('agreements').insert({date:f.date,title:f.title,detail:f.detail,category:f.category,status:'activo',created_by:S.user?.role}); notifyOther('nuevo acuerdo registrado', f.title+' ('+f.category+')', true); await loadAll(); render(); }
 async function dbDelAgreement(id){ await sb.from('agreements').delete().eq('id',id); await loadAll(); render(); }
 async function dbToggleAgreement(id){ const a=S.agreements.find(x=>x.id===id); await sb.from('agreements').update({status:a.status==='activo'?'archivado':'activo'}).eq('id',id); await loadAll(); render(); }
-async function dbSendMsg(text){ await sb.from('messages').insert({from_user:S.user.role,text}); await loadAll(); render(); }
-async function dbAddWish(f){ await sb.from('wishlist').insert({item:f.item,priority:f.priority,requested_by:f.requestedBy,done:false}); await loadAll(); render(); }
+async function dbSendMsg(text){ await sb.from('messages').insert({from_user:S.user.role,text}); notifyOther('nuevo mensaje', text.slice(0,80)+(text.length>80?'…':''), false); await loadAll(); render(); }
+async function dbAddWish(f){ await sb.from('wishlist').insert({item:f.item,priority:f.priority,requested_by:f.requestedBy,done:false}); notifyOther('nuevo artículo en lista de deseos', f.item, false); await loadAll(); render(); }
 async function dbDelWish(id){ await sb.from('wishlist').delete().eq('id',id); await loadAll(); render(); }
 async function dbToggleWish(id){ const w=S.wishlist.find(x=>x.id===id); await sb.from('wishlist').update({done:!w.done}).eq('id',id); await loadAll(); render(); }
 async function dbAddNote(text,color){
   await sb.from('notes').insert({text,color:color||'yellow',from_user:S.user.role,created_at:new Date().toISOString()});
+  notifyOther('nueva nota', text.slice(0,80), false);
   await loadAll(); render();
 }
 async function dbDelNote(id){ await sb.from('notes').delete().eq('id',id); await loadAll(); render(); }
 
-async function dbSaveChild(data){ await sb.from('child_profile').update({...data,updated_at:new Date().toISOString()}).eq('id',S.child.id); await loadAll(); render(); }
+async function dbSaveChild(data){ await sb.from('child_profile').update({...data,updated_at:new Date().toISOString()}).eq('id',S.child.id); notifyOther('ficha de '+(data.name||'la menor')+' actualizada', 'Datos de la ficha modificados', false); await loadAll(); render(); }
 
 // ── PDF export ────────────────────────────────────────────────────────────────
 function exportPDF(){
@@ -575,7 +599,7 @@ function renderShell(){
 
   // Alerts
   const alerts=[];
-  S.expenses.filter(e=>e.status==='pendiente').forEach(e=>{const age=Math.round((Date.now()-new Date(e.date+'T12:00:00'))/86400000);if(age>=14)alerts.push(`"${e.desc}" — ${age}d pendiente`);});
+  S.expenses.filter(e=>e.status==='pendiente').forEach(e=>{const age=Math.round((Date.now()-new Date(e.date+'T12:00:00'))/86400000);if(age>=14)alerts.push('"'+e.desc+'" — '+age+'d pendiente');});
   const custodyOn = ds => { const e=S.events.find(ev=>ev.from<=ds&&ev.to>=ds&&ev.changeStatus!=='rechazado'); return e?e.who:null; };
   S.events.forEach(ev=>{
     if(ev.changeStatus==='rechazado') return;
@@ -590,11 +614,13 @@ function renderShell(){
   hL.append(el('span',{style:{fontSize:22}},'🤝'),el('div',{}));
   hL.children[1].append(
     el('div',{style:{fontWeight:800,fontSize:15,letterSpacing:-0.3}},'Coparentalidad'),
-    el('div',{style:{color:'#64748b',fontSize:11}},`${S.user.name} · ${S.child.name||'Martina'}`)
+    el('div',{style:{color:'#64748b',fontSize:11}},S.user.name+' · '+(S.child.name||'Martina'))
   );
   const hR=el('div',{style:{display:'flex',gap:8,alignItems:'center'}});
-  if(Math.abs(diff)>0.01) hR.appendChild(badge(diff>0?`Eva debe ${fmtM(diff)}`:`Jorge debe ${fmtM(Math.abs(diff))}`,'badge-warn'));
+  if(Math.abs(diff)>0.01) hR.appendChild(badge(diff>0?'Eva debe '+fmtM(diff):'Jorge debe '+fmtM(Math.abs(diff)),'badge-warn'));
   hR.append(
+    el('button',{className:'btn-ghost',style:{fontSize:13,padding:'6px 10px'},onClick:()=>{UI.searchOpen=!UI.searchOpen;UI.searchQuery='';render();}},'🔍'),
+    el('button',{className:'btn-ghost',style:{fontSize:13,padding:'6px 10px'},onClick:toggleTheme},UI.theme==='dark'?'☀️':'🌙'),
     el('button',{className:'btn-ghost',style:{fontSize:11},onClick:exportPDF},'📄 PDF'),
     el('button',{className:'btn-ghost',style:{fontSize:11,padding:'6px 10px'},onClick:async()=>{await sb.auth.signOut();S.user=null;rtSubs.forEach(s=>sb.removeChannel(s));render();}},'Salir')
   );
@@ -627,10 +653,10 @@ function renderShell(){
     if(UI.searchQuery.trim().length>1){
       const q=UI.searchQuery.toLowerCase();
       const results=[];
-      S.expenses.filter(e=>e.desc?.toLowerCase().includes(q)||e.cat?.toLowerCase().includes(q)||e.note?.toLowerCase().includes(q)).forEach(e=>results.push({type:'💶 Gasto',title:e.desc,sub:`${fmtM(e.amount)} · ${fmt(e.date)}`,onClick:()=>{S.tab=2;UI.searchOpen=false;render();}}));
-      S.agreements.filter(a=>a.title?.toLowerCase().includes(q)||a.detail?.toLowerCase().includes(q)||a.category?.toLowerCase().includes(q)).forEach(a=>results.push({type:'📝 Acuerdo',title:a.title,sub:`${a.category} · ${fmt(a.date)}`,onClick:()=>{S.tab=4;UI.searchOpen=false;render();}}));
-      S.messages.filter(m=>m.text?.toLowerCase().includes(q)).forEach(m=>results.push({type:'💬 Mensaje',title:m.text.slice(0,60)+(m.text.length>60?'…':''),sub:`${nameOf(m.from)} · ${new Date(m.ts).toLocaleDateString('es-ES')}`,onClick:()=>{S.tab=4;UI.agSubTab=1;UI.searchOpen=false;render();}}));
-      S.events.filter(ev=>ev.note?.toLowerCase().includes(q)).forEach(ev=>results.push({type:'📅 Custodia',title:ev.note,sub:`${nameOf(ev.who)} · ${fmt(ev.from)}→${fmt(ev.to)}`,onClick:()=>{S.tab=1;UI.searchOpen=false;render();}}));
+      S.expenses.filter(e=>e.desc?.toLowerCase().includes(q)||e.cat?.toLowerCase().includes(q)||e.note?.toLowerCase().includes(q)).forEach(e=>results.push({type:'💶 Gasto',title:e.desc,sub:fmtM(e.amount)+' · '+fmt(e.date),onClick:()=>{S.tab=2;UI.searchOpen=false;render();}}));
+      S.agreements.filter(a=>a.title?.toLowerCase().includes(q)||a.detail?.toLowerCase().includes(q)||a.category?.toLowerCase().includes(q)).forEach(a=>results.push({type:'📝 Acuerdo',title:a.title,sub:a.category+' · '+fmt(a.date),onClick:()=>{S.tab=4;UI.searchOpen=false;render();}}));
+      S.messages.filter(m=>m.text?.toLowerCase().includes(q)).forEach(m=>results.push({type:'💬 Mensaje',title:m.text.slice(0,60)+(m.text.length>60?'…':''),sub:nameOf(m.from)+' · '+new Date(m.ts).toLocaleDateString('es-ES'),onClick:()=>{S.tab=4;UI.agSubTab=1;UI.searchOpen=false;render();}}));
+      S.events.filter(ev=>ev.note?.toLowerCase().includes(q)).forEach(ev=>results.push({type:'📅 Custodia',title:ev.note,sub:nameOf(ev.who)+' · '+fmt(ev.from)+'→'+fmt(ev.to),onClick:()=>{S.tab=1;UI.searchOpen=false;render();}}));
       if(!results.length){
         searchEl.appendChild(el('div',{style:{color:'#475569',fontSize:13,padding:'8px 0'}},'Sin resultados'));
       } else {
@@ -643,7 +669,7 @@ function renderShell(){
           );
           rl.appendChild(row);
         });
-        if(results.length>12) rl.appendChild(el('div',{style:{fontSize:11,color:'#475569',padding:'6px 0'}},`+${results.length-12} más`));
+        if(results.length>12) rl.appendChild(el('div',{style:{fontSize:11,color:'#475569',padding:'6px 0'}},'+'+(results.length-12)+' más'));
         searchEl.appendChild(rl);
       }
     }
@@ -667,7 +693,7 @@ function renderShell(){
       const txt=el('div',{});
       txt.appendChild(el('div',{style:{fontSize:12,fontWeight:700,color:'#60a5fa',marginBottom:3}},'📋 Resumen semana anterior'));
       const parts=[];
-      if(weekExp.length) parts.push(`${weekExp.length} gastos (${fmtM(weekTotal)}${weekPend>0?' · '+fmtM(weekPend)+' pendiente':''})`);
+      if(weekExp.length) parts.push(weekExp.length+' gastos ('+fmtM(weekTotal)+(weekPend>0?' · '+fmtM(weekPend)+' pendiente':'')+')');
       if(weekEvs.length) parts.push(weekEvs.length+' periodos de custodia');
       txt.appendChild(el('div',{style:{fontSize:11,color:'#93c5fd'}},parts.join(' · ')));
       const closeBtn=el('button',{style:{background:'none',border:'none',color:'#475569',fontSize:16,cursor:'pointer',flexShrink:0},onClick:()=>{UI.summaryDismissed=monStr;localStorage.setItem('cp:summaryDismissed',monStr);render();}},'✕');
@@ -733,7 +759,7 @@ function renderDashboard(diff){
   tc.append(el('div',{style:{fontSize:11,color:'#94a3b8',marginBottom:8,textTransform:'uppercase',letterSpacing:0.5}},'📅 Hoy · '+new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'})));
   if(todayEv){
     tc.append(
-      el('div',{style:{fontWeight:800,fontSize:22,marginBottom:4,color:CUSTODY_TEXT[todayEv.who]}}, S.child.name||'Martina'+' está con '+(nameOf(todayEv.who))+''),
+      el('div',{style:{fontWeight:800,fontSize:22,marginBottom:4,color:CUSTODY_TEXT[todayEv.who]}}, (S.child.name||'Martina')+' está con '+nameOf(todayEv.who)),
       el('div',{style:{fontSize:13,color:'#94a3b8'}},'hasta el '+(fmt(todayEv.to))+(todayEv.note?' · '+todayEv.note:'')+'')
     );
   } else {
@@ -1125,6 +1151,9 @@ function renderWeekGenForm(){
   }
 
   form.appendChild(el('button',{className:'btn-primary',style:{width:'100%'},onClick:async()=>{
+    // Validar que la fecha de inicio es lunes
+    const startDow=new Date(f.startDate+'T12:00:00').getDay();
+    if(startDow!==1){ alert('La fecha de inicio debe ser un lunes. Has elegido '+['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][startDow]+'.'); return; }
     const events=generateWeeklySchedule(f.startDate,f.weeks,f.wednesdayMode);
     // Adjust startWith
     let whoWeek=f.startWith;
@@ -1520,7 +1549,7 @@ function renderAiEventParser(){
       UI.aiParserLoading=true;render();
       try{
         const yr=new Date().getFullYear();
-        const prompt=`Hoy es ${today()}. Analiza este texto sobre un plan de custodia y devuelve SOLO un objeto JSON con estos campos exactos: who (J=Jorge, E=Eva, ambos), from (YYYY-MM-DD), to (YYYY-MM-DD), note (string breve). Texto: "${UI.aiParserText}". Responde SOLO con el JSON, sin explicación ni markdown.`;
+        const prompt='Hoy es '+today()+'. Analiza este texto sobre un plan de custodia y devuelve SOLO un objeto JSON con estos campos exactos: who (J=Jorge, E=Eva, ambos), from (YYYY-MM-DD), to (YYYY-MM-DD), note (string breve). Texto: "'+UI.aiParserText+'". Responde SOLO con el JSON, sin explicación ni markdown.';
         const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:200,messages:[{role:'user',content:prompt}]})});
         const data=await resp.json();
         const text=data.content?.[0]?.text||'';
@@ -1563,9 +1592,9 @@ function renderStats(){
       if(cd[k]===0) return;
       const s=el('div',{style:{textAlign:'center',padding:'10px 6px',background:'#0f172a',borderRadius:10,border:'1px solid '+c+'22'}});
       s.append(
-        el('div',{style:{fontWeight:800,fontSize:18,color:c}},`${Math.round(cd[k]/td*100)}%`),
+        el('div',{style:{fontWeight:800,fontSize:18,color:c}},Math.round(cd[k]/td*100)+'%'),
         el('div',{style:{fontSize:11,color:'#64748b',marginTop:2}},l),
-        el('div',{style:{fontSize:10,color:'#334155'}},`${cd[k]} días`)
+        el('div',{style:{fontSize:10,color:'#334155'}},cd[k]+' días')
       );
       statsRow.appendChild(s);
     });
@@ -1577,7 +1606,7 @@ function renderStats(){
   const monthly={};
   for(let i=5;i>=0;i--){
     const d=new Date(now.getFullYear(),now.getMonth()-i,1);
-    const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
     monthly[key]={total:0,J:0,E:0,label:MONTHS[d.getMonth()]};
   }
   S.expenses.forEach(e=>{
@@ -1597,7 +1626,7 @@ function renderStats(){
     const chart=el('div',{style:{display:'flex',gap:6,alignItems:'flex-end',height:100,marginBottom:8}});
     entries.forEach(([key,v])=>{
       const col2=el('div',{style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}});
-      if(v.total>0) col2.appendChild(el('div',{style:{fontSize:9,color:'#64748b',textAlign:'center'}},`${Math.round(v.total)}€`));
+      if(v.total>0) col2.appendChild(el('div',{style:{fontSize:9,color:'#64748b',textAlign:'center'}},Math.round(v.total)+'€'));
       const barWrap=el('div',{style:{width:'100%',display:'flex',flexDirection:'column',justifyContent:'flex-end',height:80,gap:1}});
       // Stacked: Jorge on bottom, Eva on top
       const jH=Math.round((v.J/maxVal)*78);
@@ -1633,9 +1662,9 @@ function renderStats(){
     topCats.forEach(([cat,amt])=>{
       const r=el('div',{style:{marginBottom:10}});
       const t=el('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:4}});
-      t.append(el('span',{style:{fontSize:13}},cat),el('span',{style:{fontSize:13,fontWeight:700}},`${fmtM(amt)} (${Math.round(amt/totalExp*100)}%)`));
+      t.append(el('span',{style:{fontSize:13}},cat),el('span',{style:{fontSize:13,fontWeight:700}},fmtM(amt)+' ('+Math.round(amt/totalExp*100)+'%)'));
       const barWrap=el('div',{style:{height:6,background:'#0f172a',borderRadius:3,overflow:'hidden'}});
-      barWrap.appendChild(el('div',{style:{height:'100%',background:'#3b82f6',width:`${amt/totalExp*100}%`,borderRadius:3}}));
+      barWrap.appendChild(el('div',{style:{height:'100%',background:'#3b82f6',width:(amt/totalExp*100)+'%',borderRadius:3}}));
       r.append(t,barWrap);bc.appendChild(r);
     });
     // Totals
@@ -1674,13 +1703,13 @@ function renderStats(){
       r.append(
         badge(l.user==='J'?'Jorge':'Eva','badge-'+(l.user==='J'?'J':'E')),
         el('div',{style:{flex:1}},[
-          el('div',{style:{fontSize:12}},`${l.action} ${l.entity}: ${l.detail}`),
+          el('div',{style:{fontSize:12}},l.action+' '+l.entity+': '+l.detail),
           el('div',{style:{fontSize:10,color:'#475569',marginTop:2}},new Date(l.ts).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))
         ])
       );
       lc.appendChild(r);
     });
-    if(logs.length>20) lc.appendChild(el('div',{style:{fontSize:11,color:'#475569',padding:'6px 0'}},`Mostrando 20 de ${logs.length} entradas`));
+    if(logs.length>20) lc.appendChild(el('div',{style:{fontSize:11,color:'#475569',padding:'6px 0'}},'Mostrando 20 de '+logs.length+' entradas'));
     wrap.appendChild(lc);
   }
 
@@ -1733,12 +1762,12 @@ function renderIntercambio(){
         optWrap.appendChild(el('button',{
           style:{flex:1,padding:'10px 4px',borderRadius:9,border:'1px solid',borderColor:active?'#3b82f6':'#334155',background:active?'#1e3a5f':'transparent',color:active?'#60a5fa':'#64748b',fontWeight:active?700:400,fontSize:12},
           onClick:()=>{saveAlertConfig(d);render();}
-        },d===1?'1 día':d===7?'1 semana':`${d} días`));
+        },d===1?'1 día':d===7?'1 semana':d+' días'));
       });
       ac.appendChild(optWrap);
-      ac.appendChild(el('div',{style:{fontSize:11,color:'#475569',marginTop:10}},`Aviso actual: ${UI.alertDaysBefore===1?'1 día':UI.alertDaysBefore===7?'1 semana':UI.alertDaysBefore+' días'} antes + mañana del cambio`));
+      ac.appendChild(el('div',{style:{fontSize:11,color:'#475569',marginTop:10}},'Aviso actual: '+(UI.alertDaysBefore===1?'1 día':UI.alertDaysBefore===7?'1 semana':UI.alertDaysBefore+' días')+' antes + mañana del cambio'));
     } else {
-      ac.appendChild(el('div',{style:{fontSize:13,color:'#94a3b8'}},`Avisas ${UI.alertDaysBefore===1?'1 día':UI.alertDaysBefore===7?'1 semana':UI.alertDaysBefore+' días'} antes de cada cambio`));
+      ac.appendChild(el('div',{style:{fontSize:13,color:'#94a3b8'}},'Avisas '+(UI.alertDaysBefore===1?'1 día':UI.alertDaysBefore===7?'1 semana':UI.alertDaysBefore+' días')+' antes de cada cambio'));
     }
     wrap.appendChild(ac);
   }
@@ -1750,8 +1779,8 @@ function renderIntercambio(){
     const nc=el('div',{className:'today-card',style:{marginBottom:14}});
     nc.append(
       el('div',{style:{fontSize:11,color:'#94a3b8',marginBottom:6,textTransform:'uppercase',letterSpacing:.5}},'Próximo intercambio'),
-      el('div',{style:{fontWeight:800,fontSize:20,color:CUSTODY_TEXT[nextEv.who],marginBottom:4}},`Con ${nameOf(nextEv.who)}`),
-      el('div',{style:{fontSize:13,color:'#94a3b8'}},`${fmt(nextEv.from)} · ${daysUntil(nextEv.from)===0?'HOY':daysUntil(nextEv.from)===1?'Mañana':'En '+daysUntil(nextEv.from)+' días'}`)
+      el('div',{style:{fontWeight:800,fontSize:20,color:CUSTODY_TEXT[nextEv.who],marginBottom:4}},'Con '+nameOf(nextEv.who)),
+      el('div',{style:{fontSize:13,color:'#94a3b8'}},fmt(nextEv.from)+' · '+(daysUntil(nextEv.from)===0?'HOY':daysUntil(nextEv.from)===1?'Mañana':'En '+daysUntil(nextEv.from)+' días'))
     );
     wrap.appendChild(nc);
   }
@@ -1763,7 +1792,7 @@ function renderIntercambio(){
   ch.append(
     el('div',{},[
       el('div',{style:{fontWeight:700,fontSize:14}},'✅ Checklist de intercambio'),
-      el('div',{style:{fontSize:11,color:'#64748b',marginTop:2}},`${done}/${S.checklist.length} completados`)
+      el('div',{style:{fontSize:11,color:'#64748b',marginTop:2}},done+'/'+S.checklist.length+' completados')
     ]),
     el('button',{className:'btn-ghost',style:{fontSize:11},onClick:()=>{
       S.checklist=S.checklist.map(i=>({...i,done:false}));
@@ -1774,7 +1803,7 @@ function renderIntercambio(){
 
   // Progress bar
   const prog=el('div',{style:{height:6,background:'#1e293b',borderRadius:3,overflow:'hidden',marginBottom:14}});
-  prog.appendChild(el('div',{style:{height:'100%',background:'#3b82f6',width:`${S.checklist.length?done/S.checklist.length*100:0}%`,borderRadius:3,transition:'width .3s'}}));
+  prog.appendChild(el('div',{style:{height:'100%',background:'#3b82f6',width:(S.checklist.length?done/S.checklist.length*100:0)+'%',borderRadius:3,transition:'width .3s'}}));
   cc.appendChild(prog);
 
   S.checklist.forEach((item,idx)=>{
