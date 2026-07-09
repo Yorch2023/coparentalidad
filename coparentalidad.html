@@ -348,14 +348,14 @@ let UI = {
   calYear: new Date().getFullYear(), calMonth: new Date().getMonth(),
   calView: 'month', // 'month' | 'week'
   calSelected: null,
-  showEventForm: false,
+  showEventForm: false, editingEventId:null,
   eventForm: {from:today(),to:today(),who:'J',note:'',changeRequest:false},
   // Weekly schedule generator
   showWeekGen: false,
   weekGen: {startDate:today(), startWith:'J', wednesdayMode:'none', weeks:12},
   // Expenses
   expFilter:'todos', expCatFilter:'todas',
-  showExpForm:false,
+  showExpForm:false, editingExpenseId:null,
   expForm:{date:today(),desc:'',amount:'',cat:'Médico',paidBy:'J',split:'50-50',status:'pendiente',note:'',receipt:null},
   // Agreements
   showAgForm:false, agSubTab:0,
@@ -375,6 +375,8 @@ let UI = {
   agTemplateOpen:false,
   // Notes
   noteText:'', noteColor:'yellow',
+  // Password change
+  showPassModal:false, newPass1:'', newPass2:'',
   // Notif
   notifRequested:false,
   // Search
@@ -431,6 +433,12 @@ async function dbAddEvent(f){
   await sendCustodyNotification('add',f,S.user?.role);
   await loadAll(); render();
 }
+async function dbUpdEventFull(id,f){
+  await sb.from('events').update({from_date:f.from,to_date:f.to,who:f.who,note:f.note}).eq('id',id);
+  logActivity('editó','custodia',nameOf(f.who)+' '+fmt(f.from)+'→'+fmt(f.to));
+  await sendCustodyNotification('update',f,S.user?.role);
+  await loadAll(); render();
+}
 async function dbAddEventsBulk(arr){
   const rows=arr.map(f=>({from_date:f.from,to_date:f.to,who:f.who,note:f.note,change_request:false,change_status:'confirmado',created_by:S.user?.role}));
   await sb.from('events').insert(rows);
@@ -462,6 +470,12 @@ async function dbAddExpense(f){
   await loadAll(); render();
 }
 async function dbDelExpense(id){ await sb.from('expenses').delete().eq('id',id); await loadAll(); render(); }
+async function dbUpdExpense(id,f){
+  await sb.from('expenses').update({date:f.date,description:f.desc,amount:parseFloat(f.amount),cat:f.cat,paid_by:f.paidBy,split:f.split,note:f.note,receipt:f.receipt||null}).eq('id',id);
+  logActivity('editó','gasto',f.desc+' '+fmtM(f.amount));
+  notifyOther('gasto corregido', f.desc+' ('+fmtM(f.amount)+')', false);
+  await loadAll(); render();
+}
 async function dbAddAgreement(f){ logActivity('añadió','acuerdo',f.title); await sb.from('agreements').insert({date:f.date,title:f.title,detail:f.detail,category:f.category,status:'activo',created_by:S.user?.role}); notifyOther('nuevo acuerdo registrado', f.title+' ('+f.category+')', true); await loadAll(); render(); }
 async function dbDelAgreement(id){ await sb.from('agreements').delete().eq('id',id); await loadAll(); render(); }
 async function dbToggleAgreement(id){ const a=S.agreements.find(x=>x.id===id); await sb.from('agreements').update({status:a.status==='activo'?'archivado':'activo'}).eq('id',id); await loadAll(); render(); }
@@ -500,8 +514,7 @@ td{padding:7px 9px;border:1px solid #e2e8f0;font-size:11px}.meta{color:#64748b;f
 <div class="stat"><div class="stat-n">${expenses.length}</div><div class="stat-l">Gastos</div></div>
 <div class="stat"><div class="stat-n">${fmtM(total)}</div><div class="stat-l">Total</div></div>
 <div class="stat"><div class="stat-n">${fmtM(pendTotal)}</div><div class="stat-l">Pendiente</div></div>
-<div class="stat"><div class="stat-n">${td}</div><div class="stat-l">Días custodia</div></div></div>
-${td>0?`<h2>Custodia</h2><table><tr><th>Jorge</th><th>Eva</th><th>Ambos</th><th>Total</th></tr><tr><td>${cd.J}d (${Math.round(cd.J/td*100)}%)</td><td>${cd.E}d (${Math.round(cd.E/td*100)}%)</td><td>${cd.ambos}d</td><td>${td}d</td></tr></table>`:''}
+</div>
 ${pend.length>0?`<h2>Gastos pendientes</h2><table><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Importe</th><th>Paga</th><th>Reparto</th></tr>${pend.map(e=>`<tr><td>${fmt(e.date)}</td><td>${e.desc}</td><td>${e.cat}</td><td>${fmtM(e.amount)}</td><td>${e.paidBy==='J'?'Jorge':'Eva'}</td><td>${e.split}</td></tr>`).join('')}</table>`:''}
 ${agreements.filter(a=>a.status==='activo').length>0?`<h2>Acuerdos activos</h2><table><tr><th>Fecha</th><th>Categoría</th><th>Acuerdo</th><th>Detalle</th></tr>${agreements.filter(a=>a.status==='activo').map(a=>`<tr><td>${fmt(a.date)}</td><td>${a.category}</td><td>${a.title}</td><td>${a.detail||'-'}</td></tr>`).join('')}</table>`:''}
 <div class="footer">Documento de registro privado. Para uso con validez legal contactar con mediador o abogado de familia.</div></body></html>`;
@@ -566,6 +579,22 @@ function renderLogin(){
   }
 
   box.append(emailWrap,passWrap,errDiv,loginBtn);
+
+  // Forgot password
+  const forgotBtn=el('button',{style:{background:'none',border:'none',color:'#60a5fa',fontSize:12,marginTop:14,width:'100%',textAlign:'center',cursor:'pointer',textDecoration:'underline'},onClick:async()=>{
+    const err=document.getElementById('loginErr');
+    if(!UI.loginEmail||!UI.loginEmail.includes('@')){ err.textContent='Escribe tu email arriba y vuelve a pulsar'; return; }
+    err.style.color='#94a3b8';
+    err.textContent='Enviando…';
+    try {
+      const {error} = await sb.auth.resetPasswordForEmail(UI.loginEmail.trim(), {redirectTo: window.location.origin + window.location.pathname});
+      if(error){ err.style.color='#fca5a5'; err.textContent='No se pudo enviar. Revisa el email.'; return; }
+      err.style.color='#6ee7b7';
+      err.textContent='✓ Revisa tu correo. Te llegará un enlace para crear una contraseña nueva.';
+    } catch(e){ err.style.color='#fca5a5'; err.textContent='Error de conexión.'; }
+  }},'He olvidado mi contraseña');
+  box.appendChild(forgotBtn);
+
   box.appendChild(el('div',{style:{fontSize:11,color:'#475569',marginTop:16,textAlign:'center',lineHeight:1.5}},'Cada usuario accede con su propia cuenta verificada. Los mensajes quedan ligados a la identidad real y no pueden editarse ni borrarse.'));
   wrap.appendChild(box);
   return wrap;
@@ -622,6 +651,7 @@ function renderShell(){
     el('button',{className:'btn-ghost',style:{fontSize:13,padding:'6px 10px'},onClick:()=>{UI.searchOpen=!UI.searchOpen;UI.searchQuery='';render();}},'🔍'),
     el('button',{className:'btn-ghost',style:{fontSize:13,padding:'6px 10px'},onClick:toggleTheme},UI.theme==='dark'?'☀️':'🌙'),
     el('button',{className:'btn-ghost',style:{fontSize:11},onClick:exportPDF},'📄 PDF'),
+    el('button',{className:'btn-ghost',style:{fontSize:13,padding:'6px 10px'},title:'Cambiar contraseña',onClick:()=>{UI.showPassModal=true;UI.newPass1='';UI.newPass2='';render();}},'🔑'),
     el('button',{className:'btn-ghost',style:{fontSize:11,padding:'6px 10px'},onClick:async()=>{await sb.auth.signOut();S.user=null;rtSubs.forEach(s=>sb.removeChannel(s));render();}},'Salir')
   );
   hdr.append(hL,hR);
@@ -715,6 +745,50 @@ function renderShell(){
   if(summaryEl) wrap.append(summaryEl);
   if(searchEl) wrap.append(searchEl);
   wrap.append(tabBar,content);
+
+  // Password change modal
+  if(UI.showPassModal){
+    const overlay=el('div',{style:{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:16},onClick:e=>{if(e.target===e.currentTarget){UI.showPassModal=false;render();}}});
+    const modal=el('div',{className:'card',style:{width:320,padding:24}});
+    modal.appendChild(el('div',{style:{fontWeight:700,fontSize:16,marginBottom:6}},'🔑 Cambiar contraseña'));
+    modal.appendChild(el('div',{style:{fontSize:12,color:'#64748b',marginBottom:16}},'Cuenta: '+(S.user.email||'')));
+
+    const p1Wrap=el('div',{style:{marginBottom:10}});
+    p1Wrap.appendChild(lbl('Nueva contraseña'));
+    const p1=el('input',{type:'password',className:'input',placeholder:'Mínimo 6 caracteres',autocomplete:'new-password'});
+    p1.addEventListener('input',e=>UI.newPass1=e.target.value);
+    p1Wrap.appendChild(p1);
+
+    const p2Wrap=el('div',{style:{marginBottom:14}});
+    p2Wrap.appendChild(lbl('Repite la contraseña'));
+    const p2=el('input',{type:'password',className:'input',placeholder:'••••••••',autocomplete:'new-password'});
+    p2.addEventListener('input',e=>UI.newPass2=e.target.value);
+    p2Wrap.appendChild(p2);
+
+    const errP=el('div',{id:'passErr',style:{fontSize:12,minHeight:16,marginBottom:10,textAlign:'center',color:'#fca5a5'}},'');
+
+    const saveP=el('button',{className:'btn-primary',style:{width:'100%'},id:'passBtn',onClick:async()=>{
+      const err=document.getElementById('passErr');
+      const btn=document.getElementById('passBtn');
+      if(!UI.newPass1||UI.newPass1.length<6){ err.textContent='Mínimo 6 caracteres'; return; }
+      if(UI.newPass1!==UI.newPass2){ err.textContent='Las contraseñas no coinciden'; return; }
+      btn.disabled=true; btn.textContent='Guardando…'; err.textContent='';
+      try {
+        const {error} = await sb.auth.updateUser({password:UI.newPass1});
+        if(error){ err.textContent='Error: '+error.message; btn.disabled=false; btn.textContent='Cambiar contraseña'; return; }
+        err.style.color='#6ee7b7';
+        err.textContent='✓ Contraseña cambiada correctamente';
+        setTimeout(()=>{UI.showPassModal=false;render();},1500);
+      } catch(e){ err.textContent='Error de conexión'; btn.disabled=false; btn.textContent='Cambiar contraseña'; }
+    }},'Cambiar contraseña');
+
+    const cancelP=el('button',{className:'btn-ghost',style:{width:'100%',marginTop:8},onClick:()=>{UI.showPassModal=false;render();}},'Cancelar');
+
+    modal.append(p1Wrap,p2Wrap,errP,saveP,cancelP);
+    overlay.appendChild(modal);
+    wrap.appendChild(overlay);
+  }
+
   return wrap;
 }
 
@@ -910,12 +984,17 @@ function renderCustodia(){
         el('button',{className:'btn-danger',onClick:()=>dbDelEvent(s.id).then(()=>UI.calSelected=null)},'✗ Rechazar')
       );
     }
+    btns.appendChild(el('button',{className:'btn-ghost',style:{fontSize:11,padding:'5px 8px'},onClick:()=>{
+      UI.editingEventId=s.id;
+      UI.eventForm={from:s.from,to:s.to,who:s.who,note:s.note||'',changeRequest:false};
+      UI.showEventForm=true;UI.calSelected=null;render();
+    }},'✏️ Editar'));
     btns.appendChild(el('button',{className:'btn-danger',onClick:()=>dbDelEvent(s.id).then(()=>UI.calSelected=null)},'Borrar'));
     top.append(info,btns);sc.appendChild(top);wrap.appendChild(sc);
   }
 
   // Add period button
-  wrap.appendChild(el('button',{className:'btn-primary',style:{width:'100%',marginBottom:10,padding:12},onClick:()=>{UI.showEventForm=!UI.showEventForm;UI.showWeekGen=false;render();}},UI.showEventForm?'Cancelar':'+ Añadir periodo'));
+  wrap.appendChild(el('button',{className:'btn-primary',style:{width:'100%',marginBottom:10,padding:12},onClick:()=>{UI.showEventForm=!UI.showEventForm;UI.showWeekGen=false;if(!UI.showEventForm){UI.editingEventId=null;UI.eventForm={from:today(),to:today(),who:'J',note:'',changeRequest:false};}render();}},UI.showEventForm?'Cancelar':'+ Añadir periodo'));
 
   // AI event parser button
   wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:8,fontSize:12},onClick:()=>{UI.showAiParser=!UI.showAiParser;UI.showEventForm=false;UI.showWeekGen=false;render();}},UI.showAiParser?'Cancelar':'🤖 Crear evento con IA (describe en texto)'));
@@ -1102,9 +1181,11 @@ function renderEventForm(){
   form.appendChild(chkWrap);
   form.appendChild(el('button',{className:'btn-primary',style:{width:'100%'},onClick:async()=>{
     if(!f.from||!f.to) return;
-    await dbAddEvent(f);
+    if(UI.editingEventId){ await dbUpdEventFull(UI.editingEventId,f); }
+    else { await dbAddEvent(f); }
+    UI.editingEventId=null;
     UI.showEventForm=false;UI.eventForm={from:today(),to:today(),who:'J',note:'',changeRequest:false};
-  }},'Guardar periodo'));
+  }},UI.editingEventId?'Guardar cambios':'Guardar periodo'));
   return form;
 }
 
@@ -1244,12 +1325,18 @@ function renderGastos(diff){
     const btns=el('div',{style:{display:'flex',flexDirection:'column',gap:5,marginLeft:8}});
     btns.append(
       el('button',{className:e.status==='pendiente'?'badge badge-warn':'badge badge-ok',style:{border:'none',cursor:'pointer',padding:'4px 8px'},onClick:()=>dbToggleExpense(e.id)},e.status==='pendiente'?'Pendiente':'Liquidado'),
+      el('button',{className:'btn-ghost',style:{fontSize:10,padding:'3px 7px'},onClick:()=>{
+        UI.editingExpenseId=e.id;
+        UI.expForm={date:e.date,desc:e.desc,amount:String(e.amount),cat:e.cat,paidBy:e.paidBy,split:e.split,status:e.status,note:e.note||'',receipt:e.receipt||null};
+        UI.showExpForm=true;render();
+        setTimeout(()=>{const f=document.querySelector('.content');if(f)f.scrollIntoView({behavior:'smooth',block:'end'});},100);
+      }},'✏️'),
       el('button',{className:'btn-danger',onClick:()=>dbDelExpense(e.id)},'✕')
     );
     top.append(info,btns);r.appendChild(top);wrap.appendChild(r);
   });
 
-  wrap.appendChild(el('button',{className:'btn-primary',style:{width:'100%',marginTop:6,padding:11},onClick:()=>{UI.showExpForm=!UI.showExpForm;render();}},UI.showExpForm?'Cancelar':'+ Añadir gasto'));
+  wrap.appendChild(el('button',{className:'btn-primary',style:{width:'100%',marginTop:6,padding:11},onClick:()=>{UI.showExpForm=!UI.showExpForm;if(!UI.showExpForm){UI.editingExpenseId=null;UI.expForm={date:today(),desc:'',amount:'',cat:'Médico',paidBy:'J',split:'50-50',status:'pendiente',note:'',receipt:null};}render();}},UI.showExpForm?'Cancelar':'+ Añadir gasto'));
 
   if(UI.showExpForm){
     const f=UI.expForm;
@@ -1274,9 +1361,11 @@ function renderGastos(diff){
     form.append(splitD,el('div',{style:{marginBottom:12}},[lbl('Nota'),inp('text',f.note,v=>UI.expForm.note=v,'Contexto...')]));
     form.appendChild(el('button',{className:'btn-primary',style:{width:'100%'},onClick:async()=>{
       if(!f.desc||!f.amount)return;
-      await dbAddExpense(f);
+      if(UI.editingExpenseId){ await dbUpdExpense(UI.editingExpenseId,f); }
+      else { await dbAddExpense(f); }
+      UI.editingExpenseId=null;
       UI.showExpForm=false;UI.expForm={date:today(),desc:'',amount:'',cat:'Médico',paidBy:'J',split:'50-50',status:'pendiente',note:'',receipt:null};
-    }},'Guardar gasto'));
+    }},UI.editingExpenseId?'Guardar cambios':'Guardar gasto'));
     wrap.appendChild(form);
   }
   return wrap;
@@ -1568,8 +1657,7 @@ function renderAiEventParser(){
 function renderStats(){
   const wrap=el('div',{});
   const now=new Date();
-
-  // ── Custody distribution ──
+  // Días de custodia (solo para detectar si hay datos, sin mostrar comparativa)
   const cd={J:0,E:0,ambos:0};
   S.events.forEach(ev=>{
     if(ev.changeStatus==='rechazado') return;
@@ -1577,30 +1665,6 @@ function renderStats(){
     while(d<=end){cd[ev.who]=(cd[ev.who]||0)+1;d.setDate(d.getDate()+1);}
   });
   const td=cd.J+cd.E+cd.ambos;
-
-  if(td>0){
-    const cc=el('div',{className:'card',style:{marginBottom:14}});
-    cc.appendChild(el('div',{style:{fontWeight:700,fontSize:14,marginBottom:12}},'📅 Distribución de custodia'));
-    // Bar
-    const bar=el('div',{style:{display:'flex',height:14,borderRadius:7,overflow:'hidden',marginBottom:12}});
-    [['J','#3b82f6'],['E','#8b5cf6'],['ambos','#10b981']].forEach(([k,c])=>{
-      if(cd[k]>0) bar.appendChild(el('div',{style:{flex:cd[k],background:c}}));
-    });
-    cc.appendChild(bar);
-    const statsRow=el('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}});
-    [['J','Jorge','#3b82f6'],['E','Eva','#8b5cf6'],['ambos','Ambos','#10b981']].forEach(([k,l,c])=>{
-      if(cd[k]===0) return;
-      const s=el('div',{style:{textAlign:'center',padding:'10px 6px',background:'#0f172a',borderRadius:10,border:'1px solid '+c+'22'}});
-      s.append(
-        el('div',{style:{fontWeight:800,fontSize:18,color:c}},Math.round(cd[k]/td*100)+'%'),
-        el('div',{style:{fontSize:11,color:'#64748b',marginTop:2}},l),
-        el('div',{style:{fontSize:10,color:'#334155'}},cd[k]+' días')
-      );
-      statsRow.appendChild(s);
-    });
-    cc.appendChild(statsRow);
-    wrap.appendChild(cc);
-  }
 
   // ── Monthly expenses last 6 months ──
   const monthly={};
@@ -1861,6 +1925,15 @@ setTimeout(()=>{
   S.checklist = loadChecklist();
   S.notifEnabled = ('Notification' in window && Notification.permission==='granted');
   document.body.className = UI.theme;
+  // Detect password recovery flow (link from reset email)
+  sb.auth.onAuthStateChange((event, session)=>{
+    if(event==='PASSWORD_RECOVERY' && session && session.user){
+      onAuthenticated(session.user).then(()=>{
+        UI.showPassModal=true; UI.newPass1=''; UI.newPass2='';
+        render();
+      });
+    }
+  });
   // Check existing session
   try {
     const {data:{session}} = await sb.auth.getSession();
