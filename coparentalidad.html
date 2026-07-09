@@ -356,6 +356,16 @@ const SOLICITUD_TIPOS = [
     motivoPlaceholder: 'Qué periodo quieres cambiar y la propuesta concreta'
   },
   {
+    id: 'modificar_periodo',
+    label: 'Modificar o cancelar un periodo ya puesto',
+    icono: '✏️',
+    ayuda: 'Para corregir fechas, cambiar quién tiene la custodia, o cancelar un periodo del calendario que ya estaba registrado. Se aplicará solo si el otro progenitor lo aprueba.',
+    necesitaHasta: true,
+    necesitaMotivo: true,
+    motivoPlaceholder: 'Qué quieres cambiar y por qué',
+    esModificacion: true
+  },
+  {
     id: 'otro',
     label: 'Otro motivo no recogido',
     icono: '📝',
@@ -431,8 +441,6 @@ let UI = {
   calYear: new Date().getFullYear(), calMonth: new Date().getMonth(),
   calView: 'month', // 'month' | 'week'
   calSelected: null,
-  showEventForm: false, editingEventId:null,
-  eventForm: {from:today(),to:today(),who:'J',note:'',changeRequest:false},
   // Solicitudes (según convenio)
   showSolicitudForm: false, solicitudTipo: null,
   solicitudForm: {from:today(), to:today(), motivo:''},
@@ -455,8 +463,6 @@ let UI = {
   wishForm:{item:'',priority:'normal',requestedBy:'J'},
   // Checklist
   checklistItem:'',
-  // AI parser
-  showAiParser:false, aiParserText:'', aiParserLoading:false, aiParserResult:null,
   // Agreements
   agTemplateOpen:false,
   // Notes
@@ -518,18 +524,6 @@ function subscribeRT(){
 }
 
 // DB ops
-async function dbAddEvent(f){
-  const {data}=await sb.from('events').insert({from_date:f.from,to_date:f.to,who:f.who,note:f.note,change_request:!!f.changeRequest,change_status:f.changeRequest?'pendiente':'confirmado',created_by:S.user?.role}).select().single();
-  logActivity('añadió','custodia',nameOf(f.who)+' '+fmt(f.from)+'→'+fmt(f.to));
-  await sendCustodyNotification('add',f,S.user?.role);
-  await loadAll(); render();
-}
-async function dbUpdEventFull(id,f){
-  await sb.from('events').update({from_date:f.from,to_date:f.to,who:f.who,note:f.note}).eq('id',id);
-  logActivity('editó','custodia',nameOf(f.who)+' '+fmt(f.from)+'→'+fmt(f.to));
-  await sendCustodyNotification('update',f,S.user?.role);
-  await loadAll(); render();
-}
 async function dbAddEventsBulk(arr){
   const rows=arr.map(f=>({from_date:f.from,to_date:f.to,who:f.who,note:f.note,change_request:false,change_status:'confirmado',created_by:S.user?.role}));
   await sb.from('events').insert(rows);
@@ -592,15 +586,32 @@ async function dbAddSolicitud(f){
     estado: 'pendiente',
     from_user: S.user.role,
     created_at: new Date().toISOString(),
+    event_id_afectado: f.eventIdAfectado||null,
+    accion: f.accion||null,
+    quien_nuevo: f.quienNuevo||null,
   }).select().single();
   logActivity('solicitó', 'solicitud', tipoInfo.label+' ('+fmt(f.from)+(f.to&&f.to!==f.from?'→'+fmt(f.to):'')+')');
   await notifySolicitud(data||{tipo_label:tipoInfo.label,from_date:f.from,to_date:f.to,motivo:f.motivo,from_user:S.user.role});
   await loadAll(); render();
 }
 async function dbRespondSolicitud(id, estado){
-  await sb.from('solicitudes').update({estado, resuelto_en:new Date().toISOString()}).eq('id',id);
   const s = S.solicitudes.find(x=>x.id===id);
-  if(s) logActivity(estado==='aprobada'?'aprobó':'rechazó', 'solicitud', s.tipo_label);
+  await sb.from('solicitudes').update({estado, resuelto_en:new Date().toISOString()}).eq('id',id);
+  if(s){
+    logActivity(estado==='aprobada'?'aprobó':'rechazó', 'solicitud', s.tipo_label);
+    // Si es una solicitud de modificación/cancelación de periodo y se aprueba, aplicar el cambio real
+    if(estado==='aprobada' && s.tipo==='modificar_periodo' && s.event_id_afectado){
+      if(s.accion==='cancelar'){
+        await sb.from('events').delete().eq('id', s.event_id_afectado);
+      } else {
+        await sb.from('events').update({
+          from_date: s.from_date, to_date: s.to_date,
+          who: s.quien_nuevo || undefined,
+          note: s.motivo,
+        }).eq('id', s.event_id_afectado);
+      }
+    }
+  }
   await loadAll(); render();
 }
 async function dbDelSolicitud(id){ await sb.from('solicitudes').delete().eq('id',id); await loadAll(); render(); }
@@ -1097,44 +1108,34 @@ function renderCustodia(){
     );
     if(s.note) info.appendChild(el('div',{style:{fontSize:12,color:'#64748b',marginBottom:4}},s.note));
     if(s.changeStatus==='pendiente') info.appendChild(el('div',{style:{background:'#422006',color:'#fed7aa',borderRadius:8,padding:'5px 10px',fontSize:11,marginBottom:6}},'⏳ Solicitud pendiente de confirmar'));
-    const btns=el('div',{style:{display:'flex',gap:6,flexShrink:0}});
-    if(s.changeStatus==='pendiente'){
-      btns.append(
-        el('button',{className:'btn-success',onClick:()=>dbUpdEvent(s.id,{change_status:'confirmado'}).then(()=>UI.calSelected=null)},'✓ Confirmar'),
-        el('button',{className:'btn-danger',onClick:()=>dbDelEvent(s.id).then(()=>UI.calSelected=null)},'✗ Rechazar')
-      );
-    }
-    btns.appendChild(el('button',{className:'btn-ghost',style:{fontSize:11,padding:'5px 8px'},onClick:()=>{
-      UI.editingEventId=s.id;
-      UI.eventForm={from:s.from,to:s.to,who:s.who,note:s.note||'',changeRequest:false};
-      UI.showEventForm=true;UI.calSelected=null;render();
-    }},'✏️ Editar'));
-    btns.appendChild(el('button',{className:'btn-danger',onClick:()=>dbDelEvent(s.id).then(()=>UI.calSelected=null)},'Borrar'));
+    const btns=el('div',{style:{display:'flex',gap:6,flexShrink:0,flexWrap:'wrap',justifyContent:'flex-end'}});
+    btns.appendChild(el('button',{className:'btn-ghost',style:{fontSize:11,padding:'5px 8px',background:'#3b1d6b',color:'#c4b5fd'},onClick:()=>{
+      UI.showSolicitudForm=true;UI.solicitudTipo='modificar_periodo';
+      UI.solicitudForm={
+        from:s.from, to:s.to, motivo:'',
+        eventIdAfectado:s.id, accion:'editar', quienNuevo:s.who,
+        aiText:'', aiLoading:false
+      };
+      UI.calSelected=null;render();
+      setTimeout(()=>{const el2=document.querySelector('.content');if(el2)el2.scrollIntoView({behavior:'smooth',block:'start'});},100);
+    }},'📋 Solicitar cambio de este periodo'));
+    btns.appendChild(el('button',{className:'btn-ghost',style:{fontSize:11,padding:'5px 8px'},onClick:()=>{UI.calSelected=null;render();}},'Cerrar'));
     top.append(info,btns);sc.appendChild(top);wrap.appendChild(sc);
   }
 
-  // Botón de solicitud formal (según convenio) — acción principal
+  // Solicitar cambio — única vía para crear, mover o cancelar un periodo
   wrap.appendChild(el('button',{
     className:'btn-primary',style:{width:'100%',marginBottom:8,padding:13,background:'#7c3aed'},
-    onClick:()=>{UI.showSolicitudForm=!UI.showSolicitudForm;UI.solicitudTipo=null;UI.showEventForm=false;UI.showWeekGen=false;UI.showAiParser=false;render();}
-  },UI.showSolicitudForm?'Cancelar':'📋 Pedir cambio, ausencia o vacaciones'));
+    onClick:()=>{UI.showSolicitudForm=!UI.showSolicitudForm;UI.solicitudTipo=null;render();}
+  },UI.showSolicitudForm?'Cancelar':'📋 Solicitar cambio, ausencia o vacaciones'));
   if(UI.showSolicitudForm) wrap.appendChild(renderSolicitudForm());
 
   // Listado de solicitudes pendientes/recientes
   if(S.solicitudes.length>0) wrap.appendChild(renderSolicitudesList());
 
-  // Add period button (uso administrativo directo, sin flujo de aprobación)
-  wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:10,padding:12,fontSize:12},onClick:()=>{UI.showEventForm=!UI.showEventForm;UI.showWeekGen=false;UI.showSolicitudForm=false;UI.showAiParser=false;if(!UI.showEventForm){UI.editingEventId=null;UI.eventForm={from:today(),to:today(),who:'J',note:'',changeRequest:false};}render();}},UI.showEventForm?'Cancelar':'+ Añadir periodo directamente (sin aprobación)'));
-
-  // AI event parser button
-  wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:8,fontSize:12},onClick:()=>{UI.showAiParser=!UI.showAiParser;UI.showEventForm=false;UI.showWeekGen=false;UI.showSolicitudForm=false;render();}},UI.showAiParser?'Cancelar':'🤖 Crear evento con IA (describe en texto)'));
-  if(UI.showAiParser) wrap.appendChild(renderAiEventParser());
-
-  // Weekly schedule generator button
-  wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:12,fontSize:12},onClick:()=>{UI.showWeekGen=!UI.showWeekGen;UI.showEventForm=false;UI.showAiParser=false;UI.showSolicitudForm=false;render();}},UI.showWeekGen?'Cancelar':'⚙️ Generar turnos semanales automáticos'));
-
-  if(UI.showEventForm) wrap.appendChild(renderEventForm());
-  if(UI.showWeekGen)   wrap.appendChild(renderWeekGenForm());
+  // Generador de turnos base (solo para precargar el calendario, no para cambios puntuales)
+  wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:12,fontSize:12},onClick:()=>{UI.showWeekGen=!UI.showWeekGen;UI.showSolicitudForm=false;render();}},UI.showWeekGen?'Cancelar':'⚙️ Generar turnos semanales base (solo configuración inicial)'));
+  if(UI.showWeekGen) wrap.appendChild(renderWeekGenForm());
 
   // Upcoming events
   const upcoming=[...S.events].filter(ev=>ev.to>=today()&&ev.changeStatus!=='rechazado').sort((a,b)=>a.from.localeCompare(b.from)).slice(0,8);
@@ -1294,11 +1295,15 @@ function renderSolicitudForm(){
 
   if(!UI.solicitudTipo){
     wrap.appendChild(el('div',{style:{fontWeight:700,fontSize:14,marginBottom:4,color:'#a78bfa'}},'¿Qué quieres solicitar?'));
-    wrap.appendChild(el('div',{style:{fontSize:11,color:'#64748b',marginBottom:12}},'Según lo pactado en el convenio regulador'));
+    wrap.appendChild(el('div',{style:{fontSize:11,color:'#64748b',marginBottom:12}},'Según lo pactado en el convenio regulador. Cualquier cambio en el calendario pasa por aquí y requiere aprobación del otro progenitor.'));
     SOLICITUD_TIPOS.forEach(t=>{
       const b=el('button',{
         style:{display:'flex',alignItems:'center',gap:10,width:'100%',textAlign:'left',padding:'11px 12px',marginBottom:6,background:'#1e293b',border:'1px solid #334155',borderRadius:9,cursor:'pointer'},
-        onClick:()=>{UI.solicitudTipo=t.id;UI.solicitudForm={from:today(),to:today(),motivo:''};render();}
+        onClick:()=>{
+          UI.solicitudTipo=t.id;
+          UI.solicitudForm={from:today(),to:today(),motivo:'',eventIdAfectado:null,accion:'editar',quienNuevo:'J',aiText:'',aiLoading:false};
+          render();
+        }
       });
       b.append(
         el('span',{style:{fontSize:20,flexShrink:0}},t.icono),
@@ -1316,13 +1321,89 @@ function renderSolicitudForm(){
   wrap.appendChild(el('div',{style:{fontWeight:700,fontSize:14,marginBottom:6,color:'#a78bfa'}},tipo.icono+' '+tipo.label));
   wrap.appendChild(el('div',{style:{fontSize:12,color:'#64748b',marginBottom:14,lineHeight:1.5,padding:'8px 10px',background:'#0f172a',borderRadius:8}},tipo.ayuda));
 
-  if(tipo.necesitaHasta){
+  // Selector de periodo existente + acción, solo para modificar_periodo
+  if(tipo.esModificacion){
+    const futuros=[...S.events].filter(ev=>ev.to>=today()&&ev.changeStatus!=='rechazado').sort((a,b)=>a.from.localeCompare(b.from));
+    wrap.appendChild(el('div',{style:{marginBottom:10}},[lbl('¿Qué periodo quieres cambiar?')]));
+    if(!futuros.length){
+      wrap.appendChild(el('div',{style:{fontSize:12,color:'#64748b',marginBottom:10}},'No hay periodos futuros en el calendario.'));
+    } else {
+      const selPeriodo=el('select',{className:'input',style:{marginBottom:10}});
+      selPeriodo.appendChild(el('option',{value:''},'— Selecciona un periodo —'));
+      futuros.forEach(ev=>{
+        const o=el('option',{value:ev.id},nameOf(ev.who)+': '+fmt(ev.from)+' → '+fmt(ev.to)+(ev.note?' ('+ev.note+')':''));
+        if(String(f.eventIdAfectado)===String(ev.id)) o.selected=true;
+        selPeriodo.appendChild(o);
+      });
+      selPeriodo.addEventListener('change',e=>{
+        UI.solicitudForm.eventIdAfectado=e.target.value||null;
+        const ev=futuros.find(x=>String(x.id)===e.target.value);
+        if(ev){ UI.solicitudForm.from=ev.from; UI.solicitudForm.to=ev.to; UI.solicitudForm.quienNuevo=ev.who; }
+        render();
+      });
+      wrap.appendChild(selPeriodo);
+    }
+    // Acción: editar o cancelar
+    const accWrap=el('div',{style:{display:'flex',gap:8,marginBottom:14}});
+    [['editar','✏️ Cambiar fechas/quién'],['cancelar','🗑️ Cancelar este periodo']].forEach(([k,l])=>{
+      accWrap.appendChild(el('button',{
+        style:{flex:1,padding:9,borderRadius:9,border:'1px solid',borderColor:f.accion===k?'#7c3aed':'#334155',background:f.accion===k?'#4c1d95':'transparent',color:f.accion===k?'#c4b5fd':'#64748b',fontWeight:f.accion===k?700:400,fontSize:12},
+        onClick:()=>{UI.solicitudForm.accion=k;render();}
+      },l));
+    });
+    wrap.appendChild(accWrap);
+  }
+
+  // Ayudante de IA para rellenar fechas a partir de texto (disponible cuando hay fechas que rellenar)
+  if(!(tipo.esModificacion && f.accion==='cancelar')){
+    wrap.appendChild(el('div',{style:{marginBottom:12,padding:'10px 12px',background:'#0f172a',border:'1px dashed #4c1d95',borderRadius:9}},[
+      el('div',{style:{fontSize:11,color:'#a78bfa',marginBottom:6,fontWeight:600}},'🤖 ¿Prefieres describirlo en texto?'),
+      (()=>{
+        const aiRow=el('div',{style:{display:'flex',gap:6}});
+        const aiInp=el('input',{className:'input',style:{flex:1,fontSize:12,padding:'7px 10px'},placeholder:'Ej: del 15 al 22 de julio con Eva por vacaciones'});
+        aiInp.value=f.aiText||'';
+        aiInp.addEventListener('input',e=>UI.solicitudForm.aiText=e.target.value);
+        const aiBtn=el('button',{className:'btn-ghost',style:{fontSize:11,flexShrink:0,padding:'7px 12px'},onClick:async()=>{
+          if(!f.aiText||!f.aiText.trim()) return;
+          UI.solicitudForm.aiLoading=true;render();
+          try{
+            const prompt='Hoy es '+today()+'. Analiza este texto sobre un plan de custodia y devuelve SOLO un objeto JSON con estos campos exactos: who (J=Jorge, E=Eva, ambos), from (YYYY-MM-DD), to (YYYY-MM-DD), note (string breve con el motivo). Texto: "'+f.aiText+'". Responde SOLO con el JSON, sin explicación ni markdown.';
+            const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:200,messages:[{role:'user',content:prompt}]})});
+            const data=await resp.json();
+            const text=data.content?.[0]?.text||'';
+            const clean=text.replace(/```json|```/g,'').trim();
+            const parsed=JSON.parse(clean);
+            UI.solicitudForm.from=parsed.from||f.from;
+            UI.solicitudForm.to=parsed.to||parsed.from||f.to;
+            UI.solicitudForm.quienNuevo=parsed.who||f.quienNuevo;
+            if(!f.motivo) UI.solicitudForm.motivo=parsed.note||'';
+          }catch(e){ /* silencioso: el usuario puede rellenar a mano */ }
+          UI.solicitudForm.aiLoading=false;render();
+        }},f.aiLoading?'…':'Rellenar');
+        aiRow.append(aiInp,aiBtn);
+        return aiRow;
+      })()
+    ]));
+  }
+
+  if(tipo.esModificacion && f.accion==='cancelar'){
+    // Solo motivo, sin fechas (se cancela el periodo seleccionado tal cual)
+  } else if(tipo.necesitaHasta){
     wrap.appendChild(row(
       col([lbl('Desde'),inp('date',f.from,v=>UI.solicitudForm.from=v)]),
       col([lbl('Hasta'),inp('date',f.to,v=>UI.solicitudForm.to=v)])
     ));
   } else {
     wrap.appendChild(el('div',{style:{marginBottom:10}},[lbl('Fecha'),inp('date',f.from,v=>{UI.solicitudForm.from=v;UI.solicitudForm.to=v;})]));
+  }
+
+  if(tipo.esModificacion && f.accion==='editar'){
+    wrap.appendChild(el('div',{style:{marginBottom:10}},[
+      lbl('Con quién'),
+      el('div',{style:{display:'flex',gap:8}},[['J','Jorge'],['E','Eva'],['ambos','Ambos']].map(([k,l])=>el('button',{
+        style:{flex:1,padding:9,borderRadius:9,border:'1px solid',borderColor:f.quienNuevo===k?CUSTODY_TEXT[k]:'#334155',background:f.quienNuevo===k?CUSTODY_BG[k]:'transparent',color:f.quienNuevo===k?CUSTODY_TEXT[k]:'#64748b',fontWeight:f.quienNuevo===k?700:400,fontSize:12},
+        onClick:()=>{UI.solicitudForm.quienNuevo=k;render();}},l)))
+    ]));
   }
 
   const ta=el('textarea',{className:'input',style:{minHeight:64,resize:'vertical'}});
@@ -1333,12 +1414,18 @@ function renderSolicitudForm(){
 
   wrap.appendChild(el('div',{style:{fontSize:11,color:'#64748b',marginBottom:10,display:'flex',alignItems:'center',gap:6}},[
     el('span',{},'📧'),
-    el('span',{},'Al enviar, llegará un email a ambos correos avisando de la solicitud.')
+    el('span',{},'Al enviar, llegará un email a ambos correos avisando de la solicitud. Solo se aplicará al calendario si el otro progenitor la aprueba.')
   ]));
 
   wrap.appendChild(el('button',{className:'btn-primary',style:{width:'100%',background:'#7c3aed'},onClick:async()=>{
     if(tipo.necesitaMotivo && !f.motivo.trim()){ alert('Este tipo de solicitud requiere indicar un motivo.'); return; }
-    await dbAddSolicitud({tipo:tipo.id,from:f.from,to:f.to,motivo:f.motivo});
+    if(tipo.esModificacion && !f.eventIdAfectado){ alert('Selecciona qué periodo quieres modificar o cancelar.'); return; }
+    await dbAddSolicitud({
+      tipo:tipo.id, from:f.from, to:f.to, motivo:f.motivo,
+      eventIdAfectado: tipo.esModificacion ? f.eventIdAfectado : null,
+      accion: tipo.esModificacion ? f.accion : null,
+      quienNuevo: tipo.esModificacion ? f.quienNuevo : null,
+    });
     UI.showSolicitudForm=false;UI.solicitudTipo=null;UI.solicitudForm={from:today(),to:today(),motivo:''};
   }},'Enviar solicitud'));
 
@@ -1363,6 +1450,16 @@ function renderSolicitudesList(){
         ]),
         badge('Pendiente','badge-warn')
       ]));
+      if(s.tipo==='modificar_periodo'){
+        if(!s.event_id_afectado){
+          card.appendChild(el('div',{style:{fontSize:11,color:'#fca5a5',marginBottom:6,padding:'5px 9px',background:'#450a0a',borderRadius:6}},'⚠️ El periodo original ya no existe (fue borrado por otra vía). Aprobar esta solicitud no hará ningún cambio en el calendario.'));
+        } else {
+          const detalle = s.accion==='cancelar'
+            ? '🗑️ Se cancelará este periodo si apruebas'
+            : '✏️ Pasaría a: '+nameOf(s.quien_nuevo)+' · '+fmt(s.from_date)+(s.to_date&&s.to_date!==s.from_date?' → '+fmt(s.to_date):'');
+          card.appendChild(el('div',{style:{fontSize:11,color:'#c4b5fd',marginBottom:6,padding:'5px 9px',background:'#2e1065',borderRadius:6}},detalle));
+        }
+      }
       if(s.motivo) card.appendChild(el('div',{style:{fontSize:12,color:'#94a3b8',marginBottom:8,fontStyle:'italic'}},s.motivo));
       const btns=el('div',{style:{display:'flex',gap:6}});
       if(!mia){
@@ -1373,7 +1470,7 @@ function renderSolicitudesList(){
       } else {
         btns.append(el('div',{style:{fontSize:11,color:'#64748b',fontStyle:'italic'}},'Esperando respuesta de '+nameOf(s.from_user==='J'?'E':'J')));
       }
-      btns.appendChild(el('button',{className:'btn-ghost',style:{fontSize:10,marginLeft:'auto'},onClick:()=>dbDelSolicitud(s.id)},'Retirar'));
+      if(mia) btns.appendChild(el('button',{className:'btn-ghost',style:{fontSize:10,marginLeft:'auto'},onClick:()=>dbDelSolicitud(s.id)},'Retirar'));
       card.appendChild(btns);
       wrap.appendChild(card);
     });
@@ -1395,37 +1492,6 @@ function renderSolicitudesList(){
   return wrap;
 }
 
-
-function renderEventForm(){
-  const f=UI.eventForm;
-  const form=el('div',{className:'card fade-in',style:{marginBottom:12}});
-  form.append(
-    row(col([lbl('Desde'),inp('date',f.from,v=>UI.eventForm.from=v)]),col([lbl('Hasta'),inp('date',f.to,v=>UI.eventForm.to=v)])),
-  );
-  form.appendChild(el('div',{style:{marginBottom:10}},[
-    lbl('Con quién'),
-    el('div',{style:{display:'flex',gap:8}},[
-      ['J','Jorge'],['E','Eva'],['ambos','Ambos']].map(([k,l])=>el('button',{
-        style:{flex:1,padding:9,borderRadius:9,border:'1px solid',borderColor:f.who===k?CUSTODY_TEXT[k]:'#334155',background:f.who===k?CUSTODY_BG[k]:'transparent',color:f.who===k?CUSTODY_TEXT[k]:'#64748b',fontWeight:f.who===k?700:400,fontSize:12},
-        onClick:()=>{UI.eventForm.who=k;render();}},l))
-    )
-  ]));
-  form.append(
-    el('div',{style:{marginBottom:10}},[lbl('Nota (opcional)'),inp('text',f.note,v=>UI.eventForm.note=v,'Ej: Vacaciones de verano')]),
-  );
-  const chkWrap=el('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:14}});
-  const chk=el('input',{type:'checkbox'});chk.checked=f.changeRequest;chk.addEventListener('change',e=>UI.eventForm.changeRequest=e.target.checked);
-  chkWrap.append(chk,el('label',{style:{fontSize:12,color:'#64748b'}},'Marcar como solicitud de cambio (requiere confirmación)'));
-  form.appendChild(chkWrap);
-  form.appendChild(el('button',{className:'btn-primary',style:{width:'100%'},onClick:async()=>{
-    if(!f.from||!f.to) return;
-    if(UI.editingEventId){ await dbUpdEventFull(UI.editingEventId,f); }
-    else { await dbAddEvent(f); }
-    UI.editingEventId=null;
-    UI.showEventForm=false;UI.eventForm={from:today(),to:today(),who:'J',note:'',changeRequest:false};
-  }},UI.editingEventId?'Guardar cambios':'Guardar periodo'));
-  return form;
-}
 
 function renderWeekGenForm(){
   const f=UI.weekGen;
@@ -1837,59 +1903,6 @@ function getActivityLog(){
 }
 
 // ── AI EVENT PARSER ───────────────────────────────────────────────────────────
-function renderAiEventParser(){
-  const wrap=el('div',{className:'card fade-in',style:{marginBottom:12,borderColor:'#1e3a5f'}});
-  wrap.appendChild(el('div',{style:{fontWeight:700,fontSize:13,color:'#60a5fa',marginBottom:8}},'🤖 Describe el plan en texto'));
-  wrap.appendChild(el('div',{style:{fontSize:11,color:'#64748b',marginBottom:10}},'Ejemplo: "Martina se queda con Eva del 15 al 22 de julio por vacaciones" o "Jorge tiene a Martina el puente de octubre"'));
-
-  const ta=el('textarea',{className:'input',style:{minHeight:70,resize:'vertical',marginBottom:10}});
-  ta.value=UI.aiParserText||'';
-  ta.placeholder='Describe el periodo de custodia…';
-  ta.addEventListener('input',e=>UI.aiParserText=e.target.value);
-  wrap.appendChild(ta);
-
-  if(UI.aiParserLoading){
-    wrap.appendChild(el('div',{style:{textAlign:'center',color:'#60a5fa',padding:'12px 0',fontSize:13}},'🤖 Procesando…'));
-  } else if(UI.aiParserResult){
-    const r=UI.aiParserResult;
-    const prev=el('div',{className:'card-dark',style:{marginBottom:10}});
-    prev.appendChild(el('div',{style:{fontSize:11,color:'#64748b',marginBottom:8}},'Resultado interpretado:'));
-    prev.append(
-      el('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:4}},[el('span',{style:{fontSize:12,color:'#94a3b8'}},'Con quién:'),el('span',{style:{fontSize:12,fontWeight:700,color:CUSTODY_TEXT[r.who]||'#f1f5f9'}},nameOf(r.who))]),
-      el('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:4}},[el('span',{style:{fontSize:12,color:'#94a3b8'}},'Desde:'),el('span',{style:{fontSize:12,fontWeight:700}},fmt(r.from))]),
-      el('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:4}},[el('span',{style:{fontSize:12,color:'#94a3b8'}},'Hasta:'),el('span',{style:{fontSize:12,fontWeight:700}},fmt(r.to))]),
-      el('div',{style:{display:'flex',justifyContent:'space-between'}},[el('span',{style:{fontSize:12,color:'#94a3b8'}},'Nota:'),el('span',{style:{fontSize:12,fontWeight:700}},r.note||'—')])
-    );
-    wrap.appendChild(prev);
-    const bRow=el('div',{style:{display:'flex',gap:8}});
-    bRow.append(
-      el('button',{className:'btn-primary',style:{flex:1},onClick:async()=>{
-        await dbAddEvent({...UI.aiParserResult,changeRequest:false});
-        UI.showAiParser=false;UI.aiParserText='';UI.aiParserResult=null;
-      }},'✓ Añadir al calendario'),
-      el('button',{className:'btn-ghost',style:{flex:1},onClick:()=>{UI.aiParserResult=null;render();}},'Reintentar')
-    );
-    wrap.appendChild(bRow);
-  } else {
-    wrap.appendChild(el('button',{className:'btn-primary',style:{width:'100%'},onClick:async()=>{
-      if(!UI.aiParserText.trim()) return;
-      UI.aiParserLoading=true;render();
-      try{
-        const yr=new Date().getFullYear();
-        const prompt='Hoy es '+today()+'. Analiza este texto sobre un plan de custodia y devuelve SOLO un objeto JSON con estos campos exactos: who (J=Jorge, E=Eva, ambos), from (YYYY-MM-DD), to (YYYY-MM-DD), note (string breve). Texto: "'+UI.aiParserText+'". Responde SOLO con el JSON, sin explicación ni markdown.';
-        const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:200,messages:[{role:'user',content:prompt}]})});
-        const data=await resp.json();
-        const text=data.content?.[0]?.text||'';
-        const clean=text.replace(/```json|```/g,'').trim();
-        UI.aiParserResult=JSON.parse(clean);
-      }catch(e){
-        UI.aiParserResult={who:'J',from:today(),to:today(),note:'Error al interpretar — edita manualmente'};
-      }
-      UI.aiParserLoading=false;render();
-    }},'🤖 Interpretar con IA'));
-  }
-  return wrap;
-}
 
 // ── STATS ─────────────────────────────────────────────────────────────────────
 function renderStats(){
