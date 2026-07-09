@@ -876,7 +876,7 @@ function renderDashboard(diff){
   // Recent messages
   if(S.messages.length>0){
     const rc=el('div',{className:'card'});
-    rc.appendChild(el('div',{style:{fontWeight:700,fontSize:13,marginBottom:10,color:'#94a3b8',textTransform:'uppercase',fontSize:11,letterSpacing:.5}},'💬 Últimos mensajes'));
+    rc.appendChild(el('div',{style:{fontWeight:700,color:'#94a3b8',textTransform:'uppercase',fontSize:11,letterSpacing:.5,marginBottom:10}},'💬 Últimos mensajes'));
     [...S.messages].slice(-3).forEach(m=>{
       const r=el('div',{style:{display:'flex',gap:8,marginBottom:8,alignItems:'start'}});
       r.append(badge(nameOf(m.from),'badge-'+(m.from==='J'?'J':'E')),el('div',{style:{fontSize:13,color:'#cbd5e1',flex:1}},m.text));
@@ -1755,7 +1755,8 @@ function renderStats(){
     wrap.appendChild(ac);
   }
 
-  if(td===0&&totalExp===0) wrap.appendChild(el('div',{style:{textAlign:'center',color:'#475569',padding:'40px 0',fontSize:13}},'Añade datos para ver las estadísticas'));
+  const hasAnyStatsContent = entries.some(([,v])=>v.total>0) || topCats.length>0 || Object.keys(byAg).length>0 || getActivityLog().length>0;
+  if(!hasAnyStatsContent) wrap.appendChild(el('div',{style:{textAlign:'center',color:'#475569',padding:'40px 0',fontSize:13}},'Añade gastos o acuerdos para ver las estadísticas'));
 
   // Activity log
   const logs=getActivityLog();
