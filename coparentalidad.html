@@ -283,7 +283,90 @@ async function notifyOther(tipo, detalle, requiereAccion){
   catch(e){ console.warn('Email error:', e); }
 }
 
-// ── Agreement templates ───────────────────────────────────────────────────────
+// ── Notificación de solicitudes formales (SIEMPRE activa, a ambos correos) ───
+// A diferencia de notifyOther/sendCustodyNotification, esto no depende de
+// NOTIFICACIONES_ACTIVAS: una solicitud formal (ausencia, cambio de miércoles,
+// intercambio, viaje, vacaciones) requiere respuesta del otro progenitor y
+// debe avisar por email SIEMPRE, a los dos correos, desde el día 1.
+async function notifySolicitud(solicitud){
+  const solicitante = nameOf(solicitud.from_user);
+  const paramsBase = {
+    from_name: solicitante,
+    action: 'ha creado una solicitud: ' + solicitud.tipo_label,
+    who: solicitud.tipo_label,
+    from_date: fmt(solicitud.from_date),
+    to_date: fmt(solicitud.to_date||solicitud.from_date),
+    note: solicitud.motivo || 'Sin motivo adicional',
+    days: '',
+    app_url: window.location.origin + window.location.pathname,
+  };
+  for(const toEmail of [EMAIL_JORGE, EMAIL_EVA]){
+    try {
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {...paramsBase, to_email: toEmail});
+    } catch(e){ console.warn('Error notificando solicitud a', toEmail, e); }
+  }
+}
+
+
+// ── Plantillas de solicitud (según convenio regulador) ────────────────────────
+const SOLICITUD_TIPOS = [
+  {
+    id: 'ausencia',
+    label: 'Ausencia en mi semana de custodia',
+    icono: '✈️',
+    ayuda: 'Trabajo, urgencia familiar o médica. El convenio da prioridad al otro progenitor para cuidar a Martina esos días; si no puede, a abuelos/tías paternas. Aviso mínimo 15 días (o cuanto antes si es urgente).',
+    necesitaHasta: true,
+    necesitaMotivo: true,
+    motivoPlaceholder: 'Motivo del viaje/ausencia y con quién quedará Martina si el otro progenitor no puede'
+  },
+  {
+    id: 'miercoles',
+    label: 'Cambio del miércoles intersemanal',
+    icono: '📆',
+    ayuda: 'El miércoles es opcional y no genera compensación si no se usa. Usa esto solo para avisar de un cambio puntual (por ejemplo, no recogerla ese miércoles concreto).',
+    necesitaHasta: false,
+    necesitaMotivo: false,
+    motivoPlaceholder: 'Detalle del cambio (opcional)'
+  },
+  {
+    id: 'intercambio',
+    label: 'Intercambio puntual de un día',
+    icono: '🔄',
+    ayuda: 'Cambiar un día o fin de semana concreto sin que afecte al reparto habitual (p. ej. día especial, cumpleaños, evento). No altera el cómputo de semanas.',
+    necesitaHasta: true,
+    necesitaMotivo: true,
+    motivoPlaceholder: 'Qué día especial u ocasión motiva el cambio'
+  },
+  {
+    id: 'viaje',
+    label: 'Viaje con los menores',
+    icono: '🌍',
+    ayuda: 'A Brasil o países Schengen no requiere autorización del otro progenitor, solo aviso. Para cualquier otro destino, sí hace falta su autorización expresa. En ambos casos, avisar con 15 días: destino, dirección y teléfono.',
+    necesitaHasta: true,
+    necesitaMotivo: true,
+    motivoPlaceholder: 'Destino, dirección de estancia y teléfono de contacto'
+  },
+  {
+    id: 'vacaciones',
+    label: 'Cambio sobre el reparto de vacaciones',
+    icono: '🏖️',
+    ayuda: 'El reparto de verano/Navidad/Semana Santa ya está fijado por convenio según año par/impar. Usa esto solo si quieres proponer una variación puntual sobre lo ya pactado.',
+    necesitaHasta: true,
+    necesitaMotivo: true,
+    motivoPlaceholder: 'Qué periodo quieres cambiar y la propuesta concreta'
+  },
+  {
+    id: 'otro',
+    label: 'Otro motivo no recogido',
+    icono: '📝',
+    ayuda: 'Cualquier situación que no encaje en las anteriores.',
+    necesitaHasta: true,
+    necesitaMotivo: true,
+    motivoPlaceholder: 'Describe la solicitud'
+  },
+];
+
+
 const AG_TEMPLATES = [
   {category:'Vacaciones', title:'Vacaciones de verano', detail:'Martina pasa la primera quincena de agosto con Jorge y la segunda con Eva. Los viajes al extranjero requieren consentimiento previo de ambos.'},
   {category:'Vacaciones', title:'Navidad', detail:'Años pares: del 24 al 31 de diciembre con Jorge, del 1 al 6 de enero con Eva. Años impares: al revés.'},
@@ -340,7 +423,7 @@ function scheduleUpcomingNotifications(){
 let S = {
   user: null,
   tab: 0,
-  expenses:[], events:[], agreements:[], messages:[], wishlist:[], notes:[],
+  expenses:[], events:[], agreements:[], messages:[], wishlist:[], notes:[], solicitudes:[],
   child:{name:'Martina',dob:'',school:'',doctor:'',ss:'',allergies:'',size_clothes:'',size_shoes:'',tutor1:'',tutor2:'',notes:''},
 };
 
@@ -350,6 +433,9 @@ let UI = {
   calSelected: null,
   showEventForm: false, editingEventId:null,
   eventForm: {from:today(),to:today(),who:'J',note:'',changeRequest:false},
+  // Solicitudes (según convenio)
+  showSolicitudForm: false, solicitudTipo: null,
+  solicitudForm: {from:today(), to:today(), motivo:''},
   // Weekly schedule generator
   showWeekGen: false,
   weekGen: {startDate:today(), startWith:'J', wednesdayMode:'none', weeks:12},
@@ -415,12 +501,17 @@ async function loadAll(){
     const nt = await sb.from('notes').select('*').order('created_at',{ascending:false});
     S.notes = nt.data||[];
   } catch(e){ S.notes=[]; console.warn('notes table not available'); }
+  // Solicitudes — optional, don't crash if table missing
+  try {
+    const sol = await sb.from('solicitudes').select('*').order('created_at',{ascending:false});
+    S.solicitudes = sol.data||[];
+  } catch(e){ S.solicitudes=[]; console.warn('solicitudes table not available'); }
 }
 
 function subscribeRT(){
   rtSubs.forEach(s=>sb.removeChannel(s));
   rtSubs=[];
-  ['events','expenses','agreements','messages','wishlist','child_profile','notes'].forEach(t=>{
+  ['events','expenses','agreements','messages','wishlist','child_profile','notes','solicitudes'].forEach(t=>{
     const c=sb.channel('rt-'+t).on('postgres_changes',{event:'*',schema:'public',table:t},()=>loadAll().then(render)).subscribe();
     rtSubs.push(c);
   });
@@ -489,6 +580,31 @@ async function dbAddNote(text,color){
   await loadAll(); render();
 }
 async function dbDelNote(id){ await sb.from('notes').delete().eq('id',id); await loadAll(); render(); }
+
+async function dbAddSolicitud(f){
+  const tipoInfo = SOLICITUD_TIPOS.find(t=>t.id===f.tipo);
+  const {data} = await sb.from('solicitudes').insert({
+    tipo: f.tipo,
+    tipo_label: tipoInfo.label,
+    from_date: f.from,
+    to_date: f.to||f.from,
+    motivo: f.motivo||'',
+    estado: 'pendiente',
+    from_user: S.user.role,
+    created_at: new Date().toISOString(),
+  }).select().single();
+  logActivity('solicitó', 'solicitud', tipoInfo.label+' ('+fmt(f.from)+(f.to&&f.to!==f.from?'→'+fmt(f.to):'')+')');
+  await notifySolicitud(data||{tipo_label:tipoInfo.label,from_date:f.from,to_date:f.to,motivo:f.motivo,from_user:S.user.role});
+  await loadAll(); render();
+}
+async function dbRespondSolicitud(id, estado){
+  await sb.from('solicitudes').update({estado, resuelto_en:new Date().toISOString()}).eq('id',id);
+  const s = S.solicitudes.find(x=>x.id===id);
+  if(s) logActivity(estado==='aprobada'?'aprobó':'rechazó', 'solicitud', s.tipo_label);
+  await loadAll(); render();
+}
+async function dbDelSolicitud(id){ await sb.from('solicitudes').delete().eq('id',id); await loadAll(); render(); }
+
 
 async function dbSaveChild(data){ await sb.from('child_profile').update({...data,updated_at:new Date().toISOString()}).eq('id',S.child.id); notifyOther('ficha de '+(data.name||'la menor')+' actualizada', 'Datos de la ficha modificados', false); await loadAll(); render(); }
 
@@ -636,6 +752,10 @@ function renderShell(){
     if(d>=0&&d<=2&&custodyOn(addDays(ev.from,-1))!==ev.who) alerts.push('Cambio de custodia '+(d===0?'HOY':'en '+d+'d')+' → '+nameOf(ev.who));
   });
   S.events.filter(ev=>ev.changeStatus==='pendiente').forEach(()=>alerts.push('Solicitud de cambio pendiente de confirmar'));
+  S.solicitudes.filter(s=>s.estado==='pendiente'&&s.from_user!==S.user.role).forEach(s=>{
+    const tipoInfo=SOLICITUD_TIPOS.find(t=>t.id===s.tipo);
+    alerts.push('📋 '+nameOf(s.from_user)+' pide: '+(tipoInfo?tipoInfo.label:s.tipo));
+  });
 
   // Header
   const hdr=el('div',{className:'header'});
@@ -993,8 +1113,18 @@ function renderCustodia(){
     top.append(info,btns);sc.appendChild(top);wrap.appendChild(sc);
   }
 
-  // Add period button
-  wrap.appendChild(el('button',{className:'btn-primary',style:{width:'100%',marginBottom:10,padding:12},onClick:()=>{UI.showEventForm=!UI.showEventForm;UI.showWeekGen=false;if(!UI.showEventForm){UI.editingEventId=null;UI.eventForm={from:today(),to:today(),who:'J',note:'',changeRequest:false};}render();}},UI.showEventForm?'Cancelar':'+ Añadir periodo'));
+  // Botón de solicitud formal (según convenio) — acción principal
+  wrap.appendChild(el('button',{
+    className:'btn-primary',style:{width:'100%',marginBottom:8,padding:13,background:'#7c3aed'},
+    onClick:()=>{UI.showSolicitudForm=!UI.showSolicitudForm;UI.solicitudTipo=null;UI.showEventForm=false;UI.showWeekGen=false;UI.showAiParser=false;render();}
+  },UI.showSolicitudForm?'Cancelar':'📋 Pedir cambio, ausencia o vacaciones'));
+  if(UI.showSolicitudForm) wrap.appendChild(renderSolicitudForm());
+
+  // Listado de solicitudes pendientes/recientes
+  if(S.solicitudes.length>0) wrap.appendChild(renderSolicitudesList());
+
+  // Add period button (uso administrativo directo, sin flujo de aprobación)
+  wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:10,padding:12,fontSize:12},onClick:()=>{UI.showEventForm=!UI.showEventForm;UI.showWeekGen=false;UI.showSolicitudForm=false;if(!UI.showEventForm){UI.editingEventId=null;UI.eventForm={from:today(),to:today(),who:'J',note:'',changeRequest:false};}render();}},UI.showEventForm?'Cancelar':'+ Añadir periodo directamente (sin aprobación)'));
 
   // AI event parser button
   wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:8,fontSize:12},onClick:()=>{UI.showAiParser=!UI.showAiParser;UI.showEventForm=false;UI.showWeekGen=false;render();}},UI.showAiParser?'Cancelar':'🤖 Crear evento con IA (describe en texto)'));
@@ -1157,6 +1287,114 @@ function renderCalWeek(){
   wrap.append(nav,hdrRow,bodyRow);
   return wrap;
 }
+
+// ── SOLICITUDES (según convenio) ──────────────────────────────────────────────
+function renderSolicitudForm(){
+  const wrap=el('div',{className:'card fade-in',style:{marginBottom:12,borderColor:'#6d28d9'}});
+
+  if(!UI.solicitudTipo){
+    wrap.appendChild(el('div',{style:{fontWeight:700,fontSize:14,marginBottom:4,color:'#a78bfa'}},'¿Qué quieres solicitar?'));
+    wrap.appendChild(el('div',{style:{fontSize:11,color:'#64748b',marginBottom:12}},'Según lo pactado en el convenio regulador'));
+    SOLICITUD_TIPOS.forEach(t=>{
+      const b=el('button',{
+        style:{display:'flex',alignItems:'center',gap:10,width:'100%',textAlign:'left',padding:'11px 12px',marginBottom:6,background:'#1e293b',border:'1px solid #334155',borderRadius:9,cursor:'pointer'},
+        onClick:()=>{UI.solicitudTipo=t.id;UI.solicitudForm={from:today(),to:today(),motivo:''};render();}
+      });
+      b.append(
+        el('span',{style:{fontSize:20,flexShrink:0}},t.icono),
+        el('div',{},[el('div',{style:{fontSize:13,fontWeight:600,color:'#e2e8f0'}},t.label)])
+      );
+      wrap.appendChild(b);
+    });
+    return wrap;
+  }
+
+  const tipo=SOLICITUD_TIPOS.find(t=>t.id===UI.solicitudTipo);
+  const f=UI.solicitudForm;
+
+  wrap.appendChild(el('button',{style:{background:'none',border:'none',color:'#a78bfa',fontSize:12,marginBottom:10,cursor:'pointer',padding:0},onClick:()=>{UI.solicitudTipo=null;render();}},'← Cambiar tipo de solicitud'));
+  wrap.appendChild(el('div',{style:{fontWeight:700,fontSize:14,marginBottom:6,color:'#a78bfa'}},tipo.icono+' '+tipo.label));
+  wrap.appendChild(el('div',{style:{fontSize:12,color:'#64748b',marginBottom:14,lineHeight:1.5,padding:'8px 10px',background:'#0f172a',borderRadius:8}},tipo.ayuda));
+
+  if(tipo.necesitaHasta){
+    wrap.appendChild(row(
+      col([lbl('Desde'),inp('date',f.from,v=>UI.solicitudForm.from=v)]),
+      col([lbl('Hasta'),inp('date',f.to,v=>UI.solicitudForm.to=v)])
+    ));
+  } else {
+    wrap.appendChild(el('div',{style:{marginBottom:10}},[lbl('Fecha'),inp('date',f.from,v=>{UI.solicitudForm.from=v;UI.solicitudForm.to=v;})]));
+  }
+
+  const ta=el('textarea',{className:'input',style:{minHeight:64,resize:'vertical'}});
+  ta.value=f.motivo;
+  ta.placeholder=tipo.motivoPlaceholder;
+  ta.addEventListener('input',e=>UI.solicitudForm.motivo=e.target.value);
+  wrap.appendChild(el('div',{style:{marginBottom:14}},[lbl(tipo.necesitaMotivo?'Motivo (obligatorio)':'Detalle (opcional)'),ta]));
+
+  wrap.appendChild(el('div',{style:{fontSize:11,color:'#64748b',marginBottom:10,display:'flex',alignItems:'center',gap:6}},[
+    el('span',{},'📧'),
+    el('span',{},'Al enviar, llegará un email a ambos correos avisando de la solicitud.')
+  ]));
+
+  wrap.appendChild(el('button',{className:'btn-primary',style:{width:'100%',background:'#7c3aed'},onClick:async()=>{
+    if(tipo.necesitaMotivo && !f.motivo.trim()){ alert('Este tipo de solicitud requiere indicar un motivo.'); return; }
+    await dbAddSolicitud({tipo:tipo.id,from:f.from,to:f.to,motivo:f.motivo});
+    UI.showSolicitudForm=false;UI.solicitudTipo=null;UI.solicitudForm={from:today(),to:today(),motivo:''};
+  }},'Enviar solicitud'));
+
+  return wrap;
+}
+
+function renderSolicitudesList(){
+  const wrap=el('div',{style:{marginBottom:14}});
+  const pendientes=S.solicitudes.filter(s=>s.estado==='pendiente');
+  const resueltas=S.solicitudes.filter(s=>s.estado!=='pendiente').slice(0,5);
+
+  if(pendientes.length){
+    wrap.appendChild(el('div',{style:{fontSize:11,fontWeight:700,color:'#a78bfa',marginBottom:8,textTransform:'uppercase',letterSpacing:.5}},'📋 Solicitudes pendientes ('+pendientes.length+')'));
+    pendientes.forEach(s=>{
+      const tipoInfo=SOLICITUD_TIPOS.find(t=>t.id===s.tipo);
+      const mia = s.from_user===S.user.role;
+      const card=el('div',{className:'card',style:{marginBottom:8,borderLeft:'3px solid #a78bfa',padding:'12px 14px'}});
+      card.appendChild(el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'start',marginBottom:6}},[
+        el('div',{},[
+          el('div',{style:{fontSize:13,fontWeight:700}},(tipoInfo?tipoInfo.icono+' ':'')+(s.tipo_label||s.tipo)),
+          el('div',{style:{fontSize:11,color:'#475569',marginTop:2}},fmt(s.from_date)+(s.to_date&&s.to_date!==s.from_date?' → '+fmt(s.to_date):'')+' · Pide '+nameOf(s.from_user))
+        ]),
+        badge('Pendiente','badge-warn')
+      ]));
+      if(s.motivo) card.appendChild(el('div',{style:{fontSize:12,color:'#94a3b8',marginBottom:8,fontStyle:'italic'}},s.motivo));
+      const btns=el('div',{style:{display:'flex',gap:6}});
+      if(!mia){
+        btns.append(
+          el('button',{className:'btn-success',onClick:()=>dbRespondSolicitud(s.id,'aprobada')},'✓ Aprobar'),
+          el('button',{className:'btn-danger',onClick:()=>dbRespondSolicitud(s.id,'rechazada')},'✗ Rechazar')
+        );
+      } else {
+        btns.append(el('div',{style:{fontSize:11,color:'#64748b',fontStyle:'italic'}},'Esperando respuesta de '+nameOf(s.from_user==='J'?'E':'J')));
+      }
+      btns.appendChild(el('button',{className:'btn-ghost',style:{fontSize:10,marginLeft:'auto'},onClick:()=>dbDelSolicitud(s.id)},'Retirar'));
+      card.appendChild(btns);
+      wrap.appendChild(card);
+    });
+  }
+
+  if(resueltas.length){
+    wrap.appendChild(el('div',{style:{fontSize:11,fontWeight:700,color:'#475569',marginBottom:8,marginTop:pendientes.length?14:0,textTransform:'uppercase',letterSpacing:.5}},'Resueltas recientemente'));
+    resueltas.forEach(s=>{
+      const tipoInfo=SOLICITUD_TIPOS.find(t=>t.id===s.tipo);
+      const card=el('div',{className:'card',style:{marginBottom:6,padding:'9px 14px',opacity:.6}});
+      card.appendChild(el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center'}},[
+        el('div',{style:{fontSize:12}},(tipoInfo?tipoInfo.icono+' ':'')+(s.tipo_label||s.tipo)+' · '+fmt(s.from_date)),
+        badge(s.estado==='aprobada'?'Aprobada':'Rechazada', s.estado==='aprobada'?'badge-ok':'badge-warn')
+      ]));
+      wrap.appendChild(card);
+    });
+  }
+
+  return wrap;
+}
+
 
 function renderEventForm(){
   const f=UI.eventForm;
