@@ -307,6 +307,29 @@ async function notifySolicitud(solicitud){
   }
 }
 
+// ── Notificación de RESOLUCIÓN de solicitud (aprobada/rechazada) — SIEMPRE ───
+// Deja constancia por email, a ambos, de quién resolvió y qué decidió.
+// Es la contraparte de notifySolicitud: cierra el círculo del consentimiento
+// (o de la falta de él) fuera de la propia app, con sello de tiempo del envío.
+async function notifyResolucionSolicitud(solicitud, estado, resuelvePor){
+  const accionTxt = estado==='aprobada' ? 'ha APROBADO' : 'ha RECHAZADO — no hay acuerdo';
+  const paramsBase = {
+    from_name: nameOf(resuelvePor),
+    action: accionTxt+' la solicitud de '+nameOf(solicitud.from_user)+': '+solicitud.tipo_label,
+    who: solicitud.tipo_label,
+    from_date: fmt(solicitud.from_date),
+    to_date: fmt(solicitud.to_date||solicitud.from_date),
+    note: estado==='aprobada' ? 'El cambio ya se ha aplicado al calendario.' : (solicitud.motivo?'Motivo original: '+solicitud.motivo:'Sin acuerdo entre ambos progenitores.'),
+    days: '',
+    app_url: window.location.origin + window.location.pathname,
+  };
+  for(const toEmail of [EMAIL_JORGE, EMAIL_EVA]){
+    try {
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {...paramsBase, to_email: toEmail});
+    } catch(e){ console.warn('Error notificando resolución a', toEmail, e); }
+  }
+}
+
 
 // ── Plantillas de solicitud (según convenio regulador) ────────────────────────
 const SOLICITUD_TIPOS = [
@@ -596,9 +619,10 @@ async function dbAddSolicitud(f){
 }
 async function dbRespondSolicitud(id, estado){
   const s = S.solicitudes.find(x=>x.id===id);
-  await sb.from('solicitudes').update({estado, resuelto_en:new Date().toISOString()}).eq('id',id);
+  const resuelvePor = S.user.role;
+  await sb.from('solicitudes').update({estado, resuelto_en:new Date().toISOString(), resuelto_por:resuelvePor}).eq('id',id);
   if(s){
-    logActivity(estado==='aprobada'?'aprobó':'rechazó', 'solicitud', s.tipo_label);
+    logActivity(estado==='aprobada'?'aprobó (consentimiento mutuo registrado)':'rechazó (SIN acuerdo)', 'solicitud', s.tipo_label+' — pedida por '+nameOf(s.from_user)+', resuelta por '+nameOf(resuelvePor));
     // Si es una solicitud de modificación/cancelación de periodo y se aprueba, aplicar el cambio real
     if(estado==='aprobada' && s.tipo==='modificar_periodo' && s.event_id_afectado){
       if(s.accion==='cancelar'){
@@ -611,6 +635,7 @@ async function dbRespondSolicitud(id, estado){
         }).eq('id', s.event_id_afectado);
       }
     }
+    await notifyResolucionSolicitud(s, estado, resuelvePor);
   }
   await loadAll(); render();
 }
@@ -1480,11 +1505,17 @@ function renderSolicitudesList(){
     wrap.appendChild(el('div',{style:{fontSize:11,fontWeight:700,color:'#475569',marginBottom:8,marginTop:pendientes.length?14:0,textTransform:'uppercase',letterSpacing:.5}},'Resueltas recientemente'));
     resueltas.forEach(s=>{
       const tipoInfo=SOLICITUD_TIPOS.find(t=>t.id===s.tipo);
-      const card=el('div',{className:'card',style:{marginBottom:6,padding:'9px 14px',opacity:.6}});
+      const esRechazo = s.estado!=='aprobada';
+      const card=el('div',{className:'card',style:{marginBottom:6,padding:'9px 14px',opacity:.75,borderLeft:esRechazo?'3px solid #ef4444':'3px solid #10b981'}});
       card.appendChild(el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center'}},[
         el('div',{style:{fontSize:12}},(tipoInfo?tipoInfo.icono+' ':'')+(s.tipo_label||s.tipo)+' · '+fmt(s.from_date)),
-        badge(s.estado==='aprobada'?'Aprobada':'Rechazada', s.estado==='aprobada'?'badge-ok':'badge-warn')
+        badge(s.estado==='aprobada'?'✓ Consentimiento mutuo':'✗ SIN acuerdo', s.estado==='aprobada'?'badge-ok':'badge-warn')
       ]));
+      if(s.resuelto_por){
+        card.appendChild(el('div',{style:{fontSize:10,color:'#64748b',marginTop:4}},
+          'Pedida por '+nameOf(s.from_user)+' · Resuelta por '+nameOf(s.resuelto_por)+(s.resuelto_en?' · '+new Date(s.resuelto_en).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'')
+        ));
+      }
       wrap.appendChild(card);
     });
   }
