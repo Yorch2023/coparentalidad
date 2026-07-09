@@ -1124,14 +1124,14 @@ function renderCustodia(){
   if(S.solicitudes.length>0) wrap.appendChild(renderSolicitudesList());
 
   // Add period button (uso administrativo directo, sin flujo de aprobación)
-  wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:10,padding:12,fontSize:12},onClick:()=>{UI.showEventForm=!UI.showEventForm;UI.showWeekGen=false;UI.showSolicitudForm=false;if(!UI.showEventForm){UI.editingEventId=null;UI.eventForm={from:today(),to:today(),who:'J',note:'',changeRequest:false};}render();}},UI.showEventForm?'Cancelar':'+ Añadir periodo directamente (sin aprobación)'));
+  wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:10,padding:12,fontSize:12},onClick:()=>{UI.showEventForm=!UI.showEventForm;UI.showWeekGen=false;UI.showSolicitudForm=false;UI.showAiParser=false;if(!UI.showEventForm){UI.editingEventId=null;UI.eventForm={from:today(),to:today(),who:'J',note:'',changeRequest:false};}render();}},UI.showEventForm?'Cancelar':'+ Añadir periodo directamente (sin aprobación)'));
 
   // AI event parser button
-  wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:8,fontSize:12},onClick:()=>{UI.showAiParser=!UI.showAiParser;UI.showEventForm=false;UI.showWeekGen=false;render();}},UI.showAiParser?'Cancelar':'🤖 Crear evento con IA (describe en texto)'));
+  wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:8,fontSize:12},onClick:()=>{UI.showAiParser=!UI.showAiParser;UI.showEventForm=false;UI.showWeekGen=false;UI.showSolicitudForm=false;render();}},UI.showAiParser?'Cancelar':'🤖 Crear evento con IA (describe en texto)'));
   if(UI.showAiParser) wrap.appendChild(renderAiEventParser());
 
   // Weekly schedule generator button
-  wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:12,fontSize:12},onClick:()=>{UI.showWeekGen=!UI.showWeekGen;UI.showEventForm=false;UI.showAiParser=false;render();}},UI.showWeekGen?'Cancelar':'⚙️ Generar turnos semanales automáticos'));
+  wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:12,fontSize:12},onClick:()=>{UI.showWeekGen=!UI.showWeekGen;UI.showEventForm=false;UI.showAiParser=false;UI.showSolicitudForm=false;render();}},UI.showWeekGen?'Cancelar':'⚙️ Generar turnos semanales automáticos'));
 
   if(UI.showEventForm) wrap.appendChild(renderEventForm());
   if(UI.showWeekGen)   wrap.appendChild(renderWeekGenForm());
