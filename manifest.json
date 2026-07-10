@@ -1,0 +1,26 @@
+{
+    "name": "Coparentalidad",
+    "short_name": "Coparentalidad",
+    "description": "Gestión de custodia, gastos y comunicación entre Jorge y Eva",
+    "start_url": "./coparentalidad.html",
+    "scope": "./",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#FEFBF6",
+    "theme_color": "#FEFBF6",
+    "lang": "es",
+    "icons": [
+          {
+                  "src": "icon-192.png",
+                  "sizes": "192x192",
+                  "type": "image/png",
+                  "purpose": "any maskable"
+          },
+          {
+                  "src": "icon-512.png",
+                  "sizes": "512x512",
+                  "type": "image/png",
+                  "purpose": "any maskable"
+          }
+    ]
+}
