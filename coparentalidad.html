@@ -98,7 +98,7 @@
 
     /* Toggle */
     .toggle-row{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:3px;gap:3px;margin-bottom:14px}
-    .toggle-btn{flex:1;padding:8px;border:none;border-radius:9px;font-size:12px;font-weight:600;color:var(--ink-soft);background:none;transition:all .15s}
+    .toggle-btn{flex:1;padding:8px;border:none;border-radius:9px;font-size:12px;font-weight:600;color:var(--ink-soft);background:none;transition:all .15s;cursor:pointer}
     .toggle-btn.active{background:var(--paper);color:var(--ink)}
 
     /* Week view */
@@ -126,6 +126,12 @@
     .tab-btn.active .icon-badge{transform:scale(1.08)}
 
     .tab-bar{display:flex;background:var(--paper);border-bottom:1px solid var(--line);overflow-x:auto;padding:8px 10px 0;gap:5px}
+    .tab-bar-wrap{position:relative}
+    .tab-bar-wrap::after{
+      content:''; position:absolute; top:0; right:0; bottom:1px; width:24px;
+      background:linear-gradient(to right, transparent, var(--paper) 75%);
+      pointer-events:none;
+    }
     .tab-btn{padding:8px 12px 9px;border:1px solid transparent;background:var(--bg);color:var(--ink-soft);font-size:12.5px;font-weight:600;white-space:nowrap;border-radius:9px 9px 0 0;cursor:pointer;position:relative;top:1px;display:inline-flex;align-items:center;gap:7px}
     .tab-btn.active{background:var(--paper);color:var(--ink);border-color:var(--line);border-bottom-color:var(--paper)}
     .tab-btn[data-c="home"].active{box-shadow:inset 0 2px 0 var(--accent)}
@@ -726,22 +732,40 @@ function exportPDF(){
   events.forEach(ev=>{let d=new Date(ev.from+'T12:00:00'),end=new Date(ev.to+'T12:00:00');while(d<=end){cd[ev.who]=(cd[ev.who]||0)+1;d.setDate(d.getDate()+1);}});
   const td=cd.J+cd.E+cd.ambos;
   const now=new Date().toLocaleDateString('es-ES');
-  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Informe Coparentalidad ${now}</title>
-<style>body{font-family:Arial,sans-serif;font-size:12px;color:#2B2724;margin:30px;line-height:1.6}
-h1{font-size:22px;margin-bottom:4px}h2{font-size:14px;margin:22px 0 8px;border-bottom:2px solid #3B8FD9;padding-bottom:4px;color:#3B8FD9}
-table{width:100%;border-collapse:collapse;margin-bottom:14px}th{background:#f8fafc;text-align:left;padding:7px 9px;font-size:11px;border:1px solid #E5E0D8;color:#8A8479}
-td{padding:7px 9px;border:1px solid #E5E0D8;font-size:11px}.meta{color:#8A8479;font-size:11px;margin-bottom:24px}
-.stat{display:inline-block;margin-right:28px}.stat-n{font-size:20px;font-weight:700}.stat-l{font-size:10px;color:#8A8479}
-.footer{margin-top:32px;padding-top:10px;border-top:1px solid #E5E0D8;font-size:10px;color:#8A8479}</style></head>
-<body><h1>🤝 Informe de Coparentalidad</h1><div class="meta">Generado el ${now} · Jorge · Eva · ${child.name||'Menor'}</div>
-<h2>Resumen</h2><div style="margin-bottom:18px">
-<div class="stat"><div class="stat-n">${expenses.length}</div><div class="stat-l">Gastos</div></div>
-<div class="stat"><div class="stat-n">${fmtM(total)}</div><div class="stat-l">Total</div></div>
-<div class="stat"><div class="stat-n">${fmtM(pendTotal)}</div><div class="stat-l">Pendiente</div></div>
-</div>
-${pend.length>0?`<h2>Gastos pendientes</h2><table><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Importe</th><th>Paga</th><th>Reparto</th></tr>${pend.map(e=>`<tr><td>${fmt(e.date)}</td><td>${e.desc}</td><td>${e.cat}</td><td>${fmtM(e.amount)}</td><td>${nameOf(e.paidBy)}</td><td>${e.split}</td></tr>`).join('')}</table>`:''}
-${agreements.filter(a=>a.status==='activo').length>0?`<h2>Acuerdos activos</h2><table><tr><th>Fecha</th><th>Categoría</th><th>Acuerdo</th><th>Detalle</th></tr>${agreements.filter(a=>a.status==='activo').map(a=>`<tr><td>${fmt(a.date)}</td><td>${a.category}</td><td>${a.title}</td><td>${a.detail||'-'}</td></tr>`).join('')}</table>`:''}
-<div class="footer">Documento de registro privado. Para uso con validez legal contactar con mediador o abogado de familia.</div></body></html>`;
+
+  function pendRow(e){
+    return '<tr><td>'+fmt(e.date)+'</td><td>'+e.desc+'</td><td>'+e.cat+'</td><td>'+fmtM(e.amount)+'</td><td>'+nameOf(e.paidBy)+'</td><td>'+e.split+'</td></tr>';
+  }
+  function agRow(a){
+    return '<tr><td>'+fmt(a.date)+'</td><td>'+a.category+'</td><td>'+a.title+'</td><td>'+(a.detail||'-')+'</td></tr>';
+  }
+  let pendSection = '';
+  if(pend.length>0){
+    pendSection = '<h2>Gastos pendientes</h2><table><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Importe</th><th>Paga</th><th>Reparto</th></tr>'+pend.map(pendRow).join('')+'</table>';
+  }
+  const activeAgreements = agreements.filter(a=>a.status==='activo');
+  let agSection = '';
+  if(activeAgreements.length>0){
+    agSection = '<h2>Acuerdos activos</h2><table><tr><th>Fecha</th><th>Categoría</th><th>Acuerdo</th><th>Detalle</th></tr>'+activeAgreements.map(agRow).join('')+'</table>';
+  }
+
+  const html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Informe Coparentalidad '+now+'</title>'+
+'<style>body{font-family:Arial,sans-serif;font-size:12px;color:#2B2724;margin:30px;line-height:1.6}'+
+'h1{font-size:22px;margin-bottom:4px}h2{font-size:14px;margin:22px 0 8px;border-bottom:2px solid #3B8FD9;padding-bottom:4px;color:#3B8FD9}'+
+'table{width:100%;border-collapse:collapse;margin-bottom:14px}th{background:#f8fafc;text-align:left;padding:7px 9px;font-size:11px;border:1px solid #E5E0D8;color:#8A8479}'+
+'td{padding:7px 9px;border:1px solid #E5E0D8;font-size:11px}.meta{color:#8A8479;font-size:11px;margin-bottom:24px}'+
+'.stat{display:inline-block;margin-right:28px}.stat-n{font-size:20px;font-weight:700}.stat-l{font-size:10px;color:#8A8479}'+
+'.footer{margin-top:32px;padding-top:10px;border-top:1px solid #E5E0D8;font-size:10px;color:#8A8479}</style></head>'+
+'<body><h1>🤝 Informe de Coparentalidad</h1><div class="meta">Generado el '+now+' · Jorge · Eva · '+(child.name||'Menor')+'</div>'+
+'<h2>Resumen</h2><div style="margin-bottom:18px">'+
+'<div class="stat"><div class="stat-n">'+expenses.length+'</div><div class="stat-l">Gastos</div></div>'+
+'<div class="stat"><div class="stat-n">'+fmtM(total)+'</div><div class="stat-l">Total</div></div>'+
+'<div class="stat"><div class="stat-n">'+fmtM(pendTotal)+'</div><div class="stat-l">Pendiente</div></div>'+
+'</div>'+
+pendSection+
+agSection+
+'<div class="footer">Documento de registro privado. Para uso con validez legal contactar con mediador o abogado de familia.</div></body></html>';
+
   const w=window.open('','_blank');w.document.write(html);w.document.close();setTimeout(()=>w.print(),500);
 }
 
@@ -1000,7 +1024,9 @@ function renderShell(){
     btn.append(badge, document.createTextNode(t.label));
     tabBar.appendChild(btn);
   });
-  wrap.append(tabBar,content);
+  const tabBarWrap=el('div',{className:'tab-bar-wrap'});
+  tabBarWrap.appendChild(tabBar);
+  wrap.append(tabBarWrap,content);
 
   // Password change modal
   if(UI.showPassModal){
@@ -1061,30 +1087,67 @@ function renderShell(){
 
 
 // ── Festivos Santa Cruz de Tenerife 2025-2027 ─────────────────────────────────
+// Fuente: BOE (nacionales) + BOC Decreto 61/2025 y Orden 6-ago-2025 (autonómicos/locales Santa Cruz de Tenerife)
 const FESTIVOS = {
-  // Nacionales
-  '2025-01-01':'Año Nuevo','2025-01-06':'Reyes Magos','2025-04-18':'Viernes Santo',
-  '2025-05-01':'Día del Trabajo','2025-08-15':'Asunción de la Virgen',
-  '2025-10-12':'Fiesta Nacional','2025-11-01':'Todos los Santos',
-  '2025-12-06':'Día de la Constitución','2025-12-08':'Inmaculada Concepción','2025-12-25':'Navidad',
-  // Canarias / Santa Cruz
-  '2025-02-03':'San Blas (local)','2025-02-28':'Carnaval (festivo local)',
-  '2025-03-04':'Martes de Carnaval (local)','2025-05-30':'Día de Canarias',
-  '2026-01-01':'Año Nuevo','2026-01-06':'Reyes Magos','2026-04-03':'Viernes Santo',
-  '2026-05-01':'Día del Trabajo','2026-08-15':'Asunción de la Virgen',
-  '2026-10-12':'Fiesta Nacional','2026-11-01':'Todos los Santos',
-  '2026-12-06':'Día de la Constitución','2026-12-08':'Inmaculada Concepción','2026-12-25':'Navidad',
-  '2026-02-03':'San Blas (local)','2026-02-16':'Carnaval (festivo local)',
-  '2026-02-17':'Martes de Carnaval (local)','2026-05-29':'Día de Canarias',
-  '2027-01-01':'Año Nuevo','2027-01-06':'Reyes Magos','2027-03-26':'Viernes Santo',
-  '2027-05-01':'Día del Trabajo','2027-08-15':'Asunción de la Virgen',
-  '2027-10-12':'Fiesta Nacional','2027-11-01':'Todos los Santos',
-  '2027-12-06':'Día de la Constitución','2027-12-08':'Inmaculada Concepción','2027-12-25':'Navidad',
-  '2027-02-03':'San Blas (local)','2027-02-08':'Carnaval (festivo local)',
-  '2027-02-09':'Martes de Carnaval (local)','2027-05-28':'Día de Canarias',
+  // ── 2025 ──
+  '2025-01-01':'Año Nuevo (nacional)',
+  '2025-01-06':'Reyes Magos (nacional)',
+  '2025-04-17':'Jueves Santo (autonómico)',
+  '2025-04-18':'Viernes Santo (nacional)',
+  '2025-05-01':'Día del Trabajo (nacional)',
+  '2025-05-30':'Día de Canarias (autonómico)',
+  '2025-08-15':'Asunción de la Virgen (nacional)',
+  '2025-10-12':'Fiesta Nacional (nacional)',
+  '2025-11-01':'Todos los Santos (nacional)',
+  '2025-12-06':'Día de la Constitución (nacional)',
+  '2025-12-08':'Inmaculada Concepción (nacional)',
+  '2025-12-25':'Navidad (nacional)',
+  '2025-02-03':'Virgen de la Candelaria (insular Tenerife)',
+  '2025-02-28':'Carnaval (festivo local Santa Cruz)',
+  '2025-03-04':'Martes de Carnaval (festivo local Santa Cruz)',
+  // ── 2026 ──
+  '2026-01-01':'Año Nuevo (nacional)',
+  '2026-01-06':'Reyes Magos (nacional)',
+  '2026-04-02':'Jueves Santo (autonómico)',
+  '2026-04-03':'Viernes Santo (nacional)',
+  '2026-05-01':'Día del Trabajo (nacional)',
+  '2026-05-30':'Día de Canarias (autonómico)',
+  '2026-08-15':'Asunción de la Virgen (nacional)',
+  '2026-10-12':'Fiesta Nacional (nacional)',
+  '2026-11-02':'Todos los Santos (nacional, traslado del 1-nov por domingo)',
+  '2026-12-06':'Día de la Constitución (nacional)',
+  '2026-12-08':'Inmaculada Concepción (nacional)',
+  '2026-12-25':'Navidad (nacional)',
+  '2026-02-03':'Virgen de la Candelaria (insular Tenerife)',
+  '2026-02-17':'Martes de Carnaval (festivo local Santa Cruz)',
+  '2026-05-04':'Día de la Cruz (festivo local Santa Cruz)',
+  // ── 2027 ──
+  '2027-01-01':'Año Nuevo (nacional)',
+  '2027-01-06':'Reyes Magos (nacional)',
+  '2027-03-25':'Jueves Santo (autonómico)',
+  '2027-03-26':'Viernes Santo (nacional)',
+  '2027-05-01':'Día del Trabajo (nacional)',
+  '2027-05-30':'Día de Canarias (autonómico)',
+  '2027-08-16':'Asunción de la Virgen (nacional, traslado del 15-ago por domingo)',
+  '2027-10-12':'Fiesta Nacional (nacional)',
+  '2027-11-01':'Todos los Santos (nacional)',
+  '2027-12-06':'Día de la Constitución (nacional)',
+  '2027-12-08':'Inmaculada Concepción (nacional)',
+  '2027-12-25':'Navidad (nacional)',
+  '2027-02-03':'Virgen de la Candelaria (insular Tenerife)',
+  // Carnaval y Día de la Cruz 2027 en Santa Cruz: pendientes de publicación oficial en BOC, añadir cuando se confirmen
 };
 function isFestivo(dateStr){ return !!FESTIVOS[dateStr]; }
 function festivoName(dateStr){ return FESTIVOS[dateStr]||''; }
+
+// ── Calendario lectivo del colegio de Martina ──────────────────────────────
+// Rellenar con el calendario oficial del centro cuando esté disponible.
+// Formato: 'YYYY-MM-DD': 'Descripción' (día no lectivo, inicio/fin de trimestre, etc.)
+const CALENDARIO_LECTIVO = {
+  // Ejemplo: '2026-09-10': 'Inicio de curso',
+};
+function isDiaLectivoEspecial(dateStr){ return !!CALENDARIO_LECTIVO[dateStr]; }
+function diaLectivoNombre(dateStr){ return CALENDARIO_LECTIVO[dateStr]||''; }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function renderDashboard(diff){
@@ -1286,7 +1349,7 @@ function renderCustodia(){
   if(UI.showWeekGen) wrap.appendChild(renderWeekGenForm());
 
   // Añadir evento a la agenda — informativo, sin aprobación
-  const btnAgenda=el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:12,fontSize:12,background:'var(--ambos-soft)',color:'var(--ambos)',borderColor:'var(--ambos)',display:'flex',alignItems:'center',justifyContent:'center',gap:8},onClick:()=>{UI.showEventoForm=!UI.showEventoForm;UI.showSolicitudForm=false;UI.showWeekGen=false;render();}});
+  const btnAgenda=el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:22,fontSize:12,background:'var(--ambos-soft)',color:'var(--ambos)',borderColor:'var(--ambos)',display:'flex',alignItems:'center',justifyContent:'center',gap:8},onClick:()=>{UI.showEventoForm=!UI.showEventoForm;UI.showSolicitudForm=false;UI.showWeekGen=false;render();}});
   if(!UI.showEventoForm){
     const icoA=el('span',{style:{display:'inline-flex',width:15,height:15}});
     icoA.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z"/></svg>';
@@ -1298,7 +1361,7 @@ function renderCustodia(){
   if(UI.showEventoForm) wrap.appendChild(renderEventoAgendaForm());
 
   // Próximos eventos de agenda
-  const proximosEventos=[...S.eventosAgenda].filter(e=>e.fecha>=today()).sort((a,b)=>a.fecha.localeCompare(b.fecha)).slice(0,6);
+  const proximosEventos=[...S.eventosAgenda].filter(e=>(e.fecha||'').slice(0,10)>=today()).sort((a,b)=>(a.fecha||'').slice(0,10).localeCompare((b.fecha||'').slice(0,10))).slice(0,6);
   if(proximosEventos.length){
     wrap.appendChild(titleIcon('party','Próximos eventos',{fontSize:11,fontWeight:700,color:'var(--ink-soft)',marginBottom:8,textTransform:'uppercase',letterSpacing:.5}));
     proximosEventos.forEach(ev=>{
@@ -1353,13 +1416,13 @@ function renderCalMonth(){
   // Legend — cada muestra reproduce exactamente cómo se ve en el calendario
   const leg=el('div',{style:{display:'flex',gap:'8px 16px',marginBottom:14,flexWrap:'wrap',alignItems:'center'}});
   [
-    {label:'Jorge', bg:'var(--jorge-soft)', textColor:'var(--jorge)'},
-    {label:'Eva', bg:'var(--eva-soft)', textColor:'var(--eva)'},
-    {label:'Ambos', bg:'var(--ambos-soft)', textColor:'var(--ambos)'},
+    {label:'Jorge', color:'var(--jorge)'},
+    {label:'Eva', color:'var(--eva)'},
+    {label:'Ambos', color:'var(--ambos)'},
   ].forEach(item=>{
-    const d=el('div',{style:{display:'flex',alignItems:'center',gap:6,flexShrink:0}});
+    const d=el('div',{style:{display:'flex',alignItems:'center',gap:7,flexShrink:0}});
     d.append(
-      el('div',{style:{width:20,height:20,borderRadius:6,background:item.bg,color:item.textColor,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,flexShrink:0}},item.label.charAt(0)),
+      el('div',{style:{width:16,height:16,borderRadius:5,background:item.color,flexShrink:0}}),
       el('span',{style:{fontSize:12,color:'var(--ink-soft)',whiteSpace:'nowrap'}},item.label)
     );
     leg.appendChild(d);
@@ -1397,10 +1460,13 @@ function renderCalMonth(){
   });
 
   // Eventos de agenda por día (informativos, no forman parte de la custodia)
+  // Normalizamos la fecha a YYYY-MM-DD por si llega con hora incluida desde Supabase
   const eventoMap={};
   S.eventosAgenda.forEach(e=>{
-    if(!eventoMap[e.fecha]) eventoMap[e.fecha]=[];
-    eventoMap[e.fecha].push(e);
+    const fk=(e.fecha||'').slice(0,10);
+    if(!fk) return;
+    if(!eventoMap[fk]) eventoMap[fk]=[];
+    eventoMap[fk].push(e);
   });
 
   const cal=el('div',{className:'card-dark',style:{padding:10,marginBottom:14}});
@@ -1431,12 +1497,17 @@ function renderCalMonth(){
     }
 
     const isFest = isFestivo(key);
+    const isLectivo = isDiaLectivoEspecial(key);
     const eventosDia = eventoMap[key]||[];
+    const titleParts=[];
+    if(isFest) titleParts.push(festivoName(key));
+    if(isLectivo) titleParts.push(diaLectivoNombre(key));
+    if(eventosDia.length) titleParts.push(eventosDia.map(e=>e.titulo).join(', '));
     const cell=el('div',{
       className:'cal-cell'+(ev||wedEv?' has-event':''),
       style:{background:bgColor,position:'relative'},
-      title:isFest?festivoName(key):(eventosDia.length?eventosDia.map(e=>e.titulo).join(', '):''),
-      onClick:()=>{if(clickEv){UI.calSelected=clickEv;render();} else if(isFest){ alert('🎉 '+festivoName(key)); } else if(eventosDia.length){ UI.calSelectedEventos=eventosDia; render(); }}
+      title:titleParts.join(' · '),
+      onClick:()=>{if(clickEv){UI.calSelected=clickEv;render();} else if(isFest){ alert('🎉 '+festivoName(key)); } else if(eventosDia.length){ UI.calSelectedEventos=eventosDia; render(); } else if(isLectivo){ alert('🏫 '+diaLectivoNombre(key)); }}
     });
     cell.appendChild(el('div',{
       className:'cal-num'+(isTdy?' today':''),
@@ -1446,6 +1517,11 @@ function renderCalMonth(){
       const festIco=el('span',{style:{position:'absolute',bottom:1,left:2,width:11,height:11,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'var(--paper)',background:'var(--accent)',borderRadius:'50%',padding:1.5,boxSizing:'border-box'}});
       festIco.innerHTML=ICONS.flag||'';
       cell.appendChild(festIco);
+    }
+    if(isLectivo){
+      const lecIco=el('span',{style:{position:'absolute',bottom:1,right:2,width:11,height:11,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'var(--paper)',background:'var(--jorge)',borderRadius:'50%',padding:1.5,boxSizing:'border-box'}});
+      lecIco.innerHTML=ICONS.school||'';
+      cell.appendChild(lecIco);
     }
     if(eventosDia.length){
       const tipoInfo = EVENTO_TIPOS.find(t=>t.id===eventosDia[0].tipo)||EVENTO_TIPOS[EVENTO_TIPOS.length-1];
@@ -1482,8 +1558,10 @@ function renderCalWeek(){
   });
   const eventoMap={};
   S.eventosAgenda.forEach(e=>{
-    if(!eventoMap[e.fecha]) eventoMap[e.fecha]=[];
-    eventoMap[e.fecha].push(e);
+    const fk=(e.fecha||'').slice(0,10);
+    if(!fk) return;
+    if(!eventoMap[fk]) eventoMap[fk]=[];
+    eventoMap[fk].push(e);
   });
 
   const DNAMES=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
@@ -1742,7 +1820,7 @@ function renderSolicitudesList(){
   const resueltas=S.solicitudes.filter(s=>s.estado!=='pendiente').slice(0,5);
 
   if(pendientes.length){
-    wrap.appendChild(titleIcon('clipboard','Solicitudes pendientes ('+pendientes.length+')',{fontSize:11,fontWeight:700,color:'var(--eva)',marginBottom:8,textTransform:'uppercase',letterSpacing:.5}));
+    wrap.appendChild(titleIcon('clipboard','Solicitudes pendientes ('+pendientes.length+')',{fontSize:11,fontWeight:700,color:'var(--eva)',marginTop:18,marginBottom:8,textTransform:'uppercase',letterSpacing:.5}));
     pendientes.forEach(s=>{
       const tipoInfo=SOLICITUD_TIPOS.find(t=>t.id===s.tipo);
       const mia = s.from_user===S.user.role;
@@ -2184,7 +2262,7 @@ function renderAcuerdos(){
     const active=agreements.filter(a=>a.status==='activo');
     const archived=agreements.filter(a=>a.status==='archivado');
     if(pendientesAg.length){
-      wrap.appendChild(titleIcon('clipboard','Pendientes de confirmar ('+pendientesAg.length+')',{fontSize:11,fontWeight:700,color:'var(--eva)',marginBottom:8,textTransform:'uppercase',letterSpacing:.5}));
+      wrap.appendChild(titleIcon('clipboard','Pendientes de confirmar ('+pendientesAg.length+')',{fontSize:11,fontWeight:700,color:'var(--eva)',marginTop:18,marginBottom:8,textTransform:'uppercase',letterSpacing:.5}));
       pendientesAg.forEach(a=>{
         const mia=a.created_by===S.user.role;
         const c=CAT_COLORS[a.category]||'var(--ink-soft)';
