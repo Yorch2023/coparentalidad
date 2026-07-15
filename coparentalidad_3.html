@@ -1,0 +1,2858 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>Coparentalidad · Jorge & Eva</title>
+
+  <!-- PWA: instalable en pantalla de inicio, abre a pantalla completa sin barra de Safari -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#FEFBF6">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Coparentalidad">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#FEFBF6; --paper:#FFFFFF; --ink:#2B2724; --ink-soft:#8A8479; --line:#EEE7D9;
+      --jorge:#3B8FD9; --jorge-soft:#E7F2FC;
+      --eva:#F2618A; --eva-soft:#FDEBF0;
+      --ambos:#43B889; --ambos-soft:#E7F8F1;
+      --alert:#E8734F; --alert-soft:#FCEEE7;
+      --accent:#D9971A; --accent-soft:#FFF3DE;
+    }
+    body.dark{
+      --bg:#1C1917; --paper:#26211D; --ink:#EDE7E0; --ink-soft:#A89E92; --line:#3A342E;
+      --jorge:#6B8CAE; --jorge-soft:#263440;
+      --eva:#C98FA0; --eva-soft:#3A2B30;
+      --ambos:#7C9885; --ambos-soft:#24302A;
+      --alert:#D98E3B; --alert-soft:#3A2C1A;
+      --accent:#C9A227; --accent-soft:#3A3419;
+    }
+    body.dark .icon-badge{filter:none}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Inter',system-ui,sans-serif;min-height:100vh;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+    .serif{font-family:'Fraunces',Georgia,serif;font-optical-sizing:auto}
+    button{cursor:pointer;font-family:inherit}
+    input,select,textarea{font-family:inherit}
+    ::-webkit-scrollbar{width:4px;height:4px}
+    ::-webkit-scrollbar-track{background:var(--bg)}
+    ::-webkit-scrollbar-thumb{background:var(--line);border-radius:2px}
+
+    /* Layout */
+    #app{min-height:100vh;max-width:640px;margin:0 auto;background:var(--bg)}
+    .header{background:var(--paper);border-bottom:1px solid var(--line);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+
+    .content{padding:16px 16px 84px;max-width:720px;margin:0 auto}
+
+    /* Cards */
+    .card{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px}
+    .card-dark{background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px}
+
+    /* Buttons */
+    .btn-primary{background:var(--ink);color:var(--paper);border:none;border-radius:12px;padding:10px 18px;font-weight:600;font-size:13px;transition:opacity .15s}
+    .btn-primary:hover{opacity:.88}
+    .btn-primary-full{display:block;width:100%;text-align:center;background:var(--jorge);color:var(--paper);border:none;border-radius:14px;padding:15px;font-weight:700;font-size:15px}
+    .btn-outline-full{display:block;width:100%;text-align:center;background:transparent;color:var(--ink-soft);border:1px solid var(--line);border-radius:14px;padding:13px;font-weight:600;font-size:14.5px;margin-bottom:10px}
+    .btn-ghost{background:var(--paper);color:var(--ink-soft);border:1px solid var(--line);border-radius:11px;padding:8px 14px;font-size:12px}
+    .btn-danger{background:var(--alert-soft);color:var(--alert);border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600}
+    .btn-success{background:var(--ambos-soft);color:var(--ambos);border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600}
+    .btn-sm{background:var(--paper);border:1px solid var(--line);color:var(--ink-soft);border-radius:9px;padding:6px 12px;font-size:14px}
+
+    /* Inputs */
+    .input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font-size:14px;outline:none;transition:border .15s}
+    .input:focus{border-color:var(--jorge)}
+    .label{display:block;font-size:11px;font-weight:700;color:var(--ink-soft);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px}
+
+    /* Badges */
+    .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
+    .chip{display:inline-block;padding:4px 10px;border-radius:999px;font-size:12.5px;font-weight:600}
+    .badge-J{background:var(--jorge-soft);color:var(--jorge)}
+    .badge-E{background:var(--eva-soft);color:var(--eva)}
+    .badge-ambos{background:var(--ambos-soft);color:var(--ambos)}
+    .badge-warn{background:var(--alert-soft);color:var(--alert)}
+    .badge-ok{background:var(--ambos-soft);color:var(--ambos)}
+
+    /* Calendar */
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+    .cal-day-hdr{text-align:center;padding:8px 4px;font-size:10px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.5px}
+    .cal-cell{min-height:40px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:default;transition:all .1s;position:relative}
+    .cal-cell.has-event{cursor:pointer}
+    .cal-cell.has-event:hover{filter:brightness(1.05)}
+    .cal-num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;font-family:'Fraunces',serif}
+    .cal-num.today{background:var(--ink);color:var(--paper);font-weight:700}
+
+    /* Dashboard widget — signature stamp element */
+    .today-card{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:20px;margin-bottom:16px;position:relative;overflow:hidden;border-left:5px solid var(--jorge)}
+
+    /* Alert banner */
+    .alert-bar{background:var(--alert-soft);border-bottom:1px solid var(--alert);padding:8px 16px;display:flex;gap:8px;align-items:center;overflow-x:auto}
+    .alert-pill{background:var(--paper);color:var(--alert);border:1px solid var(--alert);border-radius:20px;padding:3px 10px;font-size:11px;white-space:nowrap;font-weight:600}
+
+    /* Toggle */
+    .toggle-row{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:3px;gap:3px;margin-bottom:14px}
+    .toggle-btn{flex:1;padding:8px;border:none;border-radius:9px;font-size:12px;font-weight:600;color:var(--ink-soft);background:none;transition:all .15s;cursor:pointer}
+    .toggle-btn.active{background:var(--paper);color:var(--ink)}
+
+    /* Week view */
+    .week-row{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}
+    .week-cell{border-radius:11px;padding:8px 4px;text-align:center;min-height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+
+    /* Scrollable msg area */
+    .msg-area{background:var(--bg);border:1px solid var(--line);border-radius:14px;height:320px;overflow-y:auto;padding:12px}
+    .bubble-J{background:var(--jorge-soft);border-radius:14px 14px 4px 14px;padding:9px 13px;max-width:75%;color:var(--ink)}
+    .bubble-E{background:var(--paper);border-radius:14px 14px 14px 4px;padding:9px 13px;max-width:75%;color:var(--ink);border:1px solid var(--line)}
+
+    /* Animations */
+    @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+    .fade-in{animation:fadeIn .2s ease}
+
+    /* Icon badges — colored pastilles for tabs, the playful touch */
+    .icon-badge{width:24px;height:24px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;transition:transform .15s;flex-shrink:0}
+    .tab-btn[data-c="home"] .icon-badge{color:var(--accent);background:var(--accent-soft)}
+    .tab-btn[data-c="cal"] .icon-badge{color:var(--jorge);background:var(--jorge-soft)}
+    .tab-btn[data-c="money"] .icon-badge{color:var(--ambos);background:var(--ambos-soft)}
+    .tab-btn[data-c="msg"] .icon-badge{color:var(--eva);background:var(--eva-soft)}
+    .tab-btn[data-c="agree"] .icon-badge{color:var(--ink);background:var(--line)}
+    .tab-btn[data-c="exchange"] .icon-badge{color:var(--alert);background:var(--alert-soft)}
+    .tab-btn[data-c="stats"] .icon-badge{color:var(--jorge);background:var(--jorge-soft)}
+    .tab-btn.active .icon-badge{transform:scale(1.08)}
+
+    .tab-bar{display:flex;background:var(--paper);border-bottom:1px solid var(--line);overflow-x:auto;padding:8px 10px 0;gap:5px}
+    .tab-bar-wrap{position:relative}
+    .tab-bar-wrap::after{
+      content:''; position:absolute; top:0; right:0; bottom:1px; width:24px;
+      background:linear-gradient(to right, transparent, var(--paper) 75%);
+      pointer-events:none;
+    }
+    .tab-btn{padding:8px 12px 9px;border:1px solid transparent;background:var(--bg);color:var(--ink-soft);font-size:12.5px;font-weight:600;white-space:nowrap;border-radius:9px 9px 0 0;cursor:pointer;position:relative;top:1px;display:inline-flex;align-items:center;gap:7px}
+    .tab-btn.active{background:var(--paper);color:var(--ink);border-color:var(--line);border-bottom-color:var(--paper)}
+    .tab-btn[data-c="home"].active{box-shadow:inset 0 2px 0 var(--accent)}
+    .tab-btn[data-c="cal"].active{box-shadow:inset 0 2px 0 var(--jorge)}
+    .tab-btn[data-c="money"].active{box-shadow:inset 0 2px 0 var(--ambos)}
+    .tab-btn[data-c="msg"].active{box-shadow:inset 0 2px 0 var(--eva)}
+    .tab-btn[data-c="agree"].active{box-shadow:inset 0 2px 0 var(--ink)}
+    .tab-btn[data-c="exchange"].active{box-shadow:inset 0 2px 0 var(--alert)}
+    .tab-btn[data-c="stats"].active{box-shadow:inset 0 2px 0 var(--jorge)}
+
+    /* Responsive */
+    @media(max-width:480px){.content{padding:10px 10px 20px}.card{padding:12px}}
+    @media(min-width:900px){
+      body{padding:24px 0}
+      #app{border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06),0 0 0 1px var(--line)}
+    }
+  </style>
+  <script>
+    // Iconos SVG de línea (sustituyen emojis) — trazos redondeados, coherentes en todos los dispositivos
+    const ICONS = {
+      home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>',
+      calendar:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+      euro:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M17 6.5c-1.2-1-2.6-1.5-4-1.5-3.6 0-6.5 3.1-6.5 7s2.9 7 6.5 7c1.4 0 2.8-.5 4-1.5"/><path d="M5.5 10h8M5.5 14h7"/></svg>',
+      child:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+      doc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>',
+      swap:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+      chart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-4"/></svg>',
+      search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
+      moon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>',
+      sun:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+      pdf:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>',
+      key:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5 18 5M18 5l2 2M15.5 7.5l3 3"/></svg>',
+      bell:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>',
+      pin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 3h6l1 6-1 2H9l-1-2z"/><path d="M8 11h8"/></svg>',
+      message:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>',
+      list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+      clipboard:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>',
+      check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+      x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+      party:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m5.8 11.3 2.9-2.9M11 5l1 1M15 3l1 1M4 21l7-2 9-9-5-5-9 9-2 7z"/></svg>',
+      warn:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
+      wallet:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V8a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h15a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6"/><circle cx="16" cy="14" r="1.4" fill="currentColor" stroke="none"/></svg>',
+      gift:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 8v13H5V8M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>',
+      sparkle:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>',
+      clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
+      cake:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6"/><path d="M4 16h16"/><path d="M12 8v5M9 3.5c0 1-.5 1.5-.5 2.5s1 1.5 1 2.5M12 3.5c0 1-.5 1.5-.5 2.5s1 1.5 1 2.5M15 3.5c0 1-.5 1.5-.5 2.5s1 1.5 1 2.5"/><path d="M4 21h16"/></svg>',
+      flag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h13l-3 4 3 4H5"/></svg>',
+      bed:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20v-8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8"/><path d="M2 16h20M6 10V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v4"/></svg>',
+      dance:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><path d="m9 10 3-2 3 2M9 22l3-9 3 9M6 15l6-5 6 5"/></svg>',
+      stethoscope:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v6a4 4 0 0 0 8 0V4"/><path d="M6 4H4M14 4h2"/><path d="M14 10a6 6 0 0 1-12 0V8"/><circle cx="18" cy="16" r="3"/><path d="M18 13v-3"/></svg>',
+      plane:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-1 0-1.3.4l-.7.7c-.3.3-.2.8.2 1l4.5 2.7L4 14.5H1.5l-.7.7L4 17l2.3 3.2.7-.7V17l3-3.5 2.7 4.5c.2.4.7.5 1 .2l.7-.7c.4-.3.5-.8.4-1.3z"/></svg>',
+      globe:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"/></svg>',
+      beach:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 12.5 22 8a10 10 0 0 0-8-6 10 10 0 0 0-4 8c0 1 .1 2 .4 3M2 22 12 12M13 13l-4.5-4.5M9.5 17.5 6 21"/></svg>',
+      shuffle:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4M2 7h13M2 17h13M20 17l-4 4-4-4"/><path d="M2 7a8 8 0 0 1 15 4M2 17a8 8 0 0 0 15-4"/></svg>',
+      robot:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M9 4h6M8 13v2M16 13v2"/><path d="M2 13v3M22 13v3"/></svg>',
+      mail:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 6 10 7 10-7"/></svg>',
+      trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>',
+      gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.36.61 1 .99 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+      school:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 4 2 10l10 6 10-6z"/><path d="M6 12v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5"/><path d="M22 10v6"/></svg>',
+      pencil:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 11-11-3-3L5 16l-1 4z"/></svg>',
+    };
+  </script>
+</head>
+<body>
+<div id="app"><div style="display:flex;align-items:center;justify-content:center;height:100vh;color:var(--ink-soft);font-size:14px">Cargando…</div></div>
+<script>
+// Error display for mobile debugging
+window.addEventListener('error', function(e){
+  var d=document.createElement('div');
+  d.style.cssText='position:fixed;bottom:0;left:0;right:0;background:var(--alert-soft);color:var(--alert);padding:10px;font-size:11px;z-index:9999;font-family:monospace;max-height:120px;overflow:auto';
+  d.textContent='ERROR: '+(e.message||'?')+' | Línea: '+(e.lineno||'?')+' | '+(e.filename||'').split('/').pop();
+  document.body.appendChild(d);
+});
+window.addEventListener('unhandledrejection', function(e){
+  var d=document.createElement('div');
+  d.style.cssText='position:fixed;bottom:0;left:0;right:0;background:var(--alert-soft);color:var(--alert);padding:10px;font-size:11px;z-index:9999;font-family:monospace;max-height:120px;overflow:auto';
+  d.textContent='PROMESA RECHAZADA: '+(e.reason&&e.reason.message?e.reason.message:JSON.stringify(e.reason)).slice(0,300);
+  document.body.appendChild(d);
+});
+</script>
+<script type="module">
+
+// ── Config ────────────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://vghadauzsutmpwhbayxj.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_QPWLzYD62-CFJlC-0ZW8YA_W8I5rIi_';
+
+// EmailJS — se actualizará cuando Jorge proporcione las claves
+const EMAILJS_PUBLIC_KEY  = 'bKdYCToXRKW8dxVXW';
+const EMAILJS_SERVICE_ID  = 'App Coparentalidad JRM';
+const EMAILJS_TEMPLATE_ID = 'o2tlenf';
+const EMAIL_JORGE = 'jrmontoto@gmail.com';
+const EMAIL_EVA   = 'saineromartineva@gmail.com';
+
+// ⚠️ Notificaciones por email DESACTIVADAS — cambiar a true cuando Eva esté informada
+const NOTIFICACIONES_ACTIVAS = false;
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+if(EMAILJS_PUBLIC_KEY !== 'PENDIENTE') emailjs.init(EMAILJS_PUBLIC_KEY);
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+const MONTHS   = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const MONTHS_L = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const EXPENSE_CATS = [
+  {id:'Ordinario', label:'Ordinario (comida, ropa, calzado del día a día)', defaultSplit:'quien paga', ayuda:'Lo cubre cada progenitor durante su semana de custodia. No se reparte.'},
+  {id:'Educación', label:'Educación (colegio, matrícula, comedor, uniforme, dispositivos, móvil)', defaultSplit:'50-50', ayuda:'Reparto obligatorio al 50% según convenio.'},
+  {id:'Actividad recomendada', label:'Actividad recomendada por el centro o médico', defaultSplit:'50-50', ayuda:'Excursiones, logopeda, refuerzo escolar: 50% obligatorio.'},
+  {id:'Médico no SS', label:'Médico no cubierto por Seguridad Social', defaultSplit:'50-50', ayuda:'Odontología, ortodoncia, óptica, farmacia: 50%.'},
+  {id:'Extraescolar no recomendada', label:'Extraescolar NO recomendada por el centro', defaultSplit:'100% quien paga', ayuda:'Requiere acuerdo previo. Sin acuerdo, la paga al 100% quien la proponga.'},
+  {id:'Extraordinario', label:'Extraordinario (requiere acuerdo previo)', defaultSplit:'50-50', ayuda:'Sin respuesta en 10 días se entiende denegado, y quien lo haga lo asume al 100%.'},
+  {id:'Otro', label:'Otro', defaultSplit:'50-50', ayuda:''},
+];
+function expenseCatInfo(id){ return EXPENSE_CATS.find(c=>c.id===id) || EXPENSE_CATS[EXPENSE_CATS.length-1]; }
+const EXPENSE_CAT_COLORS = {'Ordinario':'var(--ambos)','Educación':'var(--jorge)','Actividad recomendada':'var(--jorge)','Médico no SS':'var(--alert)','Extraescolar no recomendada':'var(--eva)','Extraordinario':'var(--accent)','Otro':'var(--ink-soft)'};
+const CAT_COLORS = {General:'var(--jorge)',Custodia:'var(--jorge)',Económico:'var(--ambos)',Salud:'var(--alert)',Colegio:'var(--eva)',Vacaciones:'var(--accent)',Extraescolar:'var(--ambos)'};
+const CUSTODY_BG   = {J:'var(--jorge-soft)',E:'var(--eva-soft)',ambos:'var(--ambos-soft)'};
+const CUSTODY_TEXT = {J:'var(--jorge)',E:'var(--eva)',ambos:'var(--ambos)'};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const today  = () => new Date().toISOString().slice(0,10);
+const fmt    = d => d ? d.slice(0,10).split('-').reverse().join('/') : '';
+const fmtM   = n => Number(n||0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
+const daysBetween = (a,b) => Math.max(0,Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000)+1);
+const daysUntil   = d => Math.round((new Date(d+'T12:00:00')-new Date(today()+'T12:00:00'))/86400000);
+const addDays     = (d,n) => { const dt=new Date(d+'T12:00:00'); dt.setDate(dt.getDate()+n); return dt.toISOString().slice(0,10); };
+const nameOf      = r => r==='J'?'Jorge':r==='E'?'Eva':r==='Común'?'Cuenta común':'Ambos';
+
+function el(tag, attrs={}, children=[]){
+  const e = document.createElement(tag);
+  Object.entries(attrs).forEach(([k,v])=>{
+    if(k==='style'&&typeof v==='object') Object.assign(e.style,v);
+    else if(k.startsWith('on')) e.addEventListener(k.slice(2).toLowerCase(),v);
+    else if(k==='className') e.className=v;
+    else e.setAttribute(k,v);
+  });
+  (Array.isArray(children)?children:[children]).forEach(c=>{
+    if(c==null) return;
+    e.appendChild(typeof c==='string'?document.createTextNode(c):c);
+  });
+  return e;
+}
+// Icono de línea inline — sustituye emojis por SVG coherente. size en px, color opcional.
+function iconEl(name, size=15, color=null){
+  const span=el('span',{style:{display:'inline-flex',alignItems:'center',justifyContent:'center',width:size+'px',height:size+'px',flexShrink:0,color:color||'currentColor'}});
+  span.innerHTML=ICONS[name]||'';
+  return span;
+}
+function inp(type, val, cb, placeholder='', cls='input'){
+  const i = el('input',{type,placeholder,className:cls});
+  i.value=val||'';
+  i.addEventListener(type==='date'?'change':'input',e=>cb(e.target.value));
+  return i;
+}
+function sel(options, val, cb){
+  const s=el('select',{className:'input'});
+  options.forEach(([v,l])=>{ const o=el('option',{value:v},l); if(v===val)o.selected=true; s.appendChild(o); });
+  s.addEventListener('change',e=>cb(e.target.value));
+  return s;
+}
+function row(...items){ const d=el('div',{style:{display:'flex',gap:10,marginBottom:10}}); items.forEach(i=>d.appendChild(i)); return d; }
+function col(children,flex=1){ const d=el('div',{style:{flex}}); (Array.isArray(children)?children:[children]).forEach(c=>d.appendChild(c)); return d; }
+function lbl(text){ return el('label',{className:'label'},text); }
+function badge(text,cls){ return el('span',{className:'badge '+cls},text); }
+// Título de sección: icono de línea + texto, mismo estilo que se le pase
+function titleIcon(iconKey, text, style){
+  const w=el('div',{style:{...style, display:'flex', alignItems:'center', gap:6}});
+  const ic=el('span',{style:{display:'inline-flex', width:14, height:14, flexShrink:0, color:'inherit'}});
+  ic.innerHTML=ICONS[iconKey]||'';
+  w.append(ic, document.createTextNode(text));
+  return w;
+}
+
+// ── Weekly schedule generator ─────────────────────────────────────────────────
+// Pattern: week A = Jorge (L-D), week B = Eva (L-D), wednesday optional
+function generateWeeklySchedule(startDate, weeksAhead=26, wednesdayMode='optional'){
+  // startDate must be a Monday; startWith = 'J' or 'E'
+  const events=[];
+  let cur = new Date(startDate+'T12:00:00');
+  let whoWeek = 'J'; // Jorge starts
+  for(let w=0;w<weeksAhead;w++){
+    const mon  = new Date(cur);
+    const sun  = new Date(cur); sun.setDate(sun.getDate()+6);
+    const wed  = new Date(cur); wed.setDate(wed.getDate()+2);
+    const thu  = new Date(cur); thu.setDate(thu.getDate()+3);
+    const monStr = mon.toISOString().slice(0,10);
+    const sunStr = sun.toISOString().slice(0,10);
+    const wedStr = wed.toISOString().slice(0,10);
+    const thuStr = thu.toISOString().slice(0,10);
+    const other  = whoWeek==='J'?'E':'J';
+
+    if(wednesdayMode==='fixed_other'){
+      // L-M con whoWeek, X con other, J-D con whoWeek
+      events.push({from:monStr, to:addDays(monStr,1), who:whoWeek, note:'Turno semanal (L-M)', auto:true});
+      events.push({from:wedStr, to:wedStr, who:other, note:'Miércoles fijo', auto:true});
+      events.push({from:thuStr, to:sunStr, who:whoWeek, note:'Turno semanal (J-D)', auto:true});
+    } else {
+      // Semana completa
+      events.push({from:monStr, to:sunStr, who:whoWeek, note:'Turno semanal', auto:true});
+    }
+    // Advance week
+    cur.setDate(cur.getDate()+7);
+    whoWeek = other;
+  }
+  return events;
+}
+
+// ── Email notifications ───────────────────────────────────────────────────────
+// ── Generic change notification ───────────────────────────────────────────────
+async function notifyOther(tipo, detalle, requiereAccion){
+  if(!NOTIFICACIONES_ACTIVAS) return;
+  if(!S.user) return;
+  const toEmail = S.user.role==='J' ? EMAIL_EVA : EMAIL_JORGE;
+  if(!toEmail) return;
+  const params = {
+    to_email: toEmail,
+    from_name: S.user.name,
+    action: tipo,
+    who: detalle,
+    from_date: '',
+    to_date: '',
+    note: requiereAccion ? 'Requiere tu revisión/aprobación en la app' : 'Informativo',
+    days: '',
+    app_url: window.location.origin + window.location.pathname,
+  };
+  try { await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, params); }
+  catch(e){ console.warn('Email error:', e); }
+}
+
+// ── Notificación de solicitudes formales (SIEMPRE activa, a ambos correos) ───
+// A diferencia de notifyOther, esto no depende de
+// NOTIFICACIONES_ACTIVAS: una solicitud formal (ausencia, cambio de miércoles,
+// intercambio, viaje, vacaciones) requiere respuesta del otro progenitor y
+// debe avisar por email SIEMPRE, a los dos correos, desde el día 1.
+async function notifySolicitud(solicitud){
+  const solicitante = nameOf(solicitud.from_user);
+  const paramsBase = {
+    from_name: solicitante,
+    action: 'ha creado una solicitud: ' + solicitud.tipo_label,
+    who: solicitud.tipo_label,
+    from_date: fmt(solicitud.from_date),
+    to_date: fmt(solicitud.to_date||solicitud.from_date),
+    note: solicitud.motivo || 'Sin motivo adicional',
+    days: '',
+    app_url: window.location.origin + window.location.pathname,
+  };
+  for(const toEmail of [EMAIL_JORGE, EMAIL_EVA]){
+    try {
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {...paramsBase, to_email: toEmail});
+    } catch(e){ console.warn('Error notificando solicitud a', toEmail, e); }
+  }
+}
+
+// ── Notificación de RESOLUCIÓN de solicitud (aprobada/rechazada) — SIEMPRE ───
+// Deja constancia por email, a ambos, de quién resolvió y qué decidió.
+// Es la contraparte de notifySolicitud: cierra el círculo del consentimiento
+// (o de la falta de él) fuera de la propia app, con sello de tiempo del envío.
+async function notifyResolucionSolicitud(solicitud, estado, resuelvePor){
+  const accionTxt = estado==='aprobada' ? 'ha APROBADO' : 'ha RECHAZADO — no hay acuerdo';
+  const paramsBase = {
+    from_name: nameOf(resuelvePor),
+    action: accionTxt+' la solicitud de '+nameOf(solicitud.from_user)+': '+solicitud.tipo_label,
+    who: solicitud.tipo_label,
+    from_date: fmt(solicitud.from_date),
+    to_date: fmt(solicitud.to_date||solicitud.from_date),
+    note: estado==='aprobada' ? 'El cambio ya se ha aplicado al calendario.' : (solicitud.motivo?'Motivo original: '+solicitud.motivo:'Sin acuerdo entre ambos progenitores.'),
+    days: '',
+    app_url: window.location.origin + window.location.pathname,
+  };
+  for(const toEmail of [EMAIL_JORGE, EMAIL_EVA]){
+    try {
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {...paramsBase, to_email: toEmail});
+    } catch(e){ console.warn('Error notificando resolución a', toEmail, e); }
+  }
+}
+
+
+// ── Plantillas de solicitud (según convenio regulador) ────────────────────────
+// ── Tipos de evento informativo (agenda de Martina) ───────────────────────────
+const EVENTO_TIPOS = [
+  {id:'cumpleanos', label:'Cumpleaños', iconKey:'cake', color:'var(--eva)'},
+  {id:'dormir_fuera', label:'Duerme en casa de alguien', iconKey:'bed', color:'var(--accent)'},
+  {id:'cole', label:'Actividad del colegio', iconKey:'school', color:'var(--jorge)'},
+  {id:'extraescolar', label:'Extraescolar (baile, deporte...)', iconKey:'dance', color:'var(--ambos)'},
+  {id:'medico', label:'Cita médica', iconKey:'stethoscope', color:'var(--alert)'},
+  {id:'otro', label:'Otro', iconKey:'pin', color:'var(--ink-soft)'},
+];
+
+const SOLICITUD_TIPOS = [
+  {
+    id: 'ausencia',
+    label: 'Ausencia en mi semana de custodia',
+    iconKey: 'plane',
+    ayuda: 'Trabajo, urgencia familiar o médica. El convenio da prioridad al otro progenitor para cuidar a Martina esos días; si no puede, a abuelos/tías paternas. Aviso mínimo 15 días (o cuanto antes si es urgente).',
+    necesitaHasta: true,
+    necesitaMotivo: true,
+    motivoPlaceholder: 'Motivo del viaje/ausencia y con quién quedará Martina si el otro progenitor no puede'
+  },
+  {
+    id: 'miercoles',
+    label: 'Cambio del miércoles intersemanal',
+    iconKey: 'calendar',
+    ayuda: 'El miércoles es opcional y no genera compensación si no se usa. Usa esto solo para avisar de un cambio puntual (por ejemplo, no recogerla ese miércoles concreto).',
+    necesitaHasta: false,
+    necesitaMotivo: false,
+    motivoPlaceholder: 'Detalle del cambio (opcional)'
+  },
+  {
+    id: 'intercambio',
+    label: 'Intercambio puntual de un día',
+    iconKey: 'shuffle',
+    ayuda: 'Cambiar un día o fin de semana concreto sin que afecte al reparto habitual (p. ej. día especial, cumpleaños, evento). No altera el cómputo de semanas.',
+    necesitaHasta: true,
+    necesitaMotivo: true,
+    motivoPlaceholder: 'Qué día especial u ocasión motiva el cambio'
+  },
+  {
+    id: 'viaje',
+    label: 'Viaje con los menores',
+    iconKey: 'globe',
+    ayuda: 'A Brasil o países Schengen no requiere autorización del otro progenitor, solo aviso. Para cualquier otro destino, sí hace falta su autorización expresa. En ambos casos, avisar con 15 días: destino, dirección y teléfono.',
+    necesitaHasta: true,
+    necesitaMotivo: true,
+    motivoPlaceholder: 'Destino, dirección de estancia y teléfono de contacto'
+  },
+  {
+    id: 'vacaciones',
+    label: 'Cambio sobre el reparto de vacaciones',
+    iconKey: 'beach',
+    ayuda: 'El reparto de verano/Navidad/Semana Santa ya está fijado por convenio según año par/impar. Usa esto solo si quieres proponer una variación puntual sobre lo ya pactado.',
+    necesitaHasta: true,
+    necesitaMotivo: true,
+    motivoPlaceholder: 'Qué periodo quieres cambiar y la propuesta concreta'
+  },
+  {
+    id: 'modificar_periodo',
+    label: 'Modificar o cancelar un periodo ya puesto',
+    iconKey: 'pencil',
+    ayuda: 'Para corregir fechas, cambiar quién tiene la custodia, o cancelar un periodo del calendario que ya estaba registrado. Se aplicará solo si el otro progenitor lo aprueba.',
+    necesitaHasta: true,
+    necesitaMotivo: true,
+    motivoPlaceholder: 'Qué quieres cambiar y por qué',
+    esModificacion: true
+  },
+  {
+    id: 'otro',
+    label: 'Otro motivo no recogido',
+    icono: '📝',
+    ayuda: 'Cualquier situación que no encaje en las anteriores.',
+    necesitaHasta: true,
+    necesitaMotivo: true,
+    motivoPlaceholder: 'Describe la solicitud'
+  },
+];
+
+
+const AG_TEMPLATES = [
+  {category:'Vacaciones', title:'Vacaciones de verano', detail:'Martina pasa la primera quincena de agosto con Jorge y la segunda con Eva. Los viajes al extranjero requieren consentimiento previo de ambos.'},
+  {category:'Vacaciones', title:'Navidad', detail:'Años pares: del 24 al 31 de diciembre con Jorge, del 1 al 6 de enero con Eva. Años impares: al revés.'},
+  {category:'Vacaciones', title:'Semana Santa', detail:'Años pares con Jorge, años impares con Eva. Incluye el fin de semana anterior y posterior.'},
+  {category:'Salud', title:'Decisiones médicas', detail:'Las decisiones médicas no urgentes requieren acuerdo previo de ambos. Las urgencias las gestiona el progenitor que esté con Martina e informa al otro en menos de 2 horas.'},
+  {category:'Salud', title:'Medicación habitual', detail:'Cada progenitor mantiene stock de medicación habitual. Se informa de cualquier cambio de pauta.'},
+  {category:'Colegio', title:'Reuniones escolares', detail:'Ambos progenitores asisten a las reuniones del colegio. Si no es posible, el que asista informa al otro en 24h.'},
+  {category:'Colegio', title:'Actividades extraescolares', detail:'Las actividades extraescolares las lleva el progenitor que tiene custodia ese día.'},
+  {category:'Económico', title:'Gastos extraordinarios', detail:'Los gastos superiores a 100€ requieren acuerdo previo. Se dividen al 50%.'},
+  {category:'Económico', title:'Gastos corrientes', detail:'Cada progenitor cubre los gastos corrientes durante su semana. Los gastos médicos y escolares al 50%.'},
+  {category:'General', title:'Comunicación con Martina', detail:'Martina puede llamar al otro progenitor en cualquier momento. Se facilita la comunicación diaria si ella lo desea.'},
+];
+
+// ── Checklist defaults ────────────────────────────────────────────────────────
+const CHECKLIST_DEFAULT = [
+  {id:1, text:'Mochila del colegio con todo el material', done:false},
+  {id:2, text:'Ropa suficiente para la semana', done:false},
+  {id:3, text:'Medicación habitual', done:false},
+  {id:4, text:'Cargador del móvil/tablet', done:false},
+  {id:5, text:'Objeto de apego (peluche/manta)', done:false},
+  {id:6, text:'Zapatillas de deporte', done:false},
+  {id:7, text:'Documentación médica si hay cita', done:false},
+  {id:8, text:'Ropa de abrigo según tiempo', done:false},
+];
+
+function loadChecklist(){
+  try { return JSON.parse(localStorage.getItem('cp:checklist')) || JSON.parse(JSON.stringify(CHECKLIST_DEFAULT)); }
+  catch { return JSON.parse(JSON.stringify(CHECKLIST_DEFAULT)); }
+}
+function saveChecklist(list){ try { localStorage.setItem('cp:checklist', JSON.stringify(list)); } catch{} }
+
+// ── Notas/mensajes vistos — solo local, marca cuándo se abrió la pestaña Mensajes
+function getLastSeenMessages(){ try { return localStorage.getItem('cp:lastSeenMessages')||''; } catch { return ''; } }
+function markMessagesSeen(){ try { localStorage.setItem('cp:lastSeenMessages', new Date().toISOString()); } catch{} }
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+// ── State ─────────────────────────────────────────────────────────────────────
+let S = {
+  user: null,
+  tab: 0,
+  expenses:[], events:[], agreements:[], messages:[], wishlist:[], notes:[], solicitudes:[], eventosAgenda:[],
+  child:{name:'Martina',dob:'',school:'',doctor:'',ss:'',allergies:'',size_clothes:'',size_shoes:'',tutor1:'',tutor2:'',notes:''},
+};
+
+let UI = {
+  theme: localStorage.getItem('cp:theme')||'light',
+  calYear: new Date().getFullYear(), calMonth: new Date().getMonth(),
+  calView: 'month', // 'month' | 'week'
+  calSelected: null,
+  calSelectedEventos: null,
+  // Eventos de agenda (informativo: cumpleaños, dormir fuera, actividades)
+  showEventoForm: false,
+  eventoForm: {tipo:'cumpleanos', titulo:'', fecha:today(), hora:'', detalle:''},
+  // Solicitudes (según convenio)
+  showSolicitudForm: false, solicitudTipo: null,
+  solicitudForm: {from:today(), to:today(), motivo:''},
+  // Weekly schedule generator
+  showWeekGen: false,
+  weekGen: {startDate:today(), startWith:'J', wednesdayMode:'none', weeks:12},
+  // Expenses
+  expFilter:'todos', expCatFilter:'todas',
+  showExpForm:false, editingExpenseId:null,
+  expForm:{date:today(),desc:'',amount:'',cat:'Ordinario',paidBy:'J',split:'50-50',status:'pendiente',note:'',receipt:null,cuentaComun:false,persona:'Martina'},
+  // Agreements
+  showAgForm:false, agSubTab:0,
+  agForm:{date:today(),title:'',detail:'',category:'General'},
+  // Messages
+  msgText:'',
+  // Ficha
+  childEditing:false, childDraft:{},
+  // Wishlist
+  showWishForm:false,
+  wishForm:{item:'',priority:'normal',requestedBy:'J'},
+  // Checklist
+  checklistItem:'',
+  // Agreements
+  agTemplateOpen:false,
+  // Notes
+  noteText:'', noteColor:'yellow',
+  // Password change
+  showPassModal:false, newPass1:'', newPass2:'', showFichaModal:false,
+  // Notif
+  notifRequested:false,
+  // Search
+  searchOpen:false, searchQuery:'',
+  // Weekly summary
+  summaryDismissed: localStorage.getItem('cp:summaryDismissed')||'',
+  // Theme
+  theme: localStorage.getItem('cp:theme')||'dark',
+  // Alert config
+  showAlertConfig:false,
+  alertDaysBefore: parseInt(localStorage.getItem('cp:alertDays')||'1'),
+};
+
+let rtSubs = [];
+
+// ── Data layer ────────────────────────────────────────────────────────────────
+async function loadAll(){
+  try {
+    const [ev,ex,ag,ms,wl,ch] = await Promise.all([
+      sb.from('events').select('*').order('from_date'),
+      sb.from('expenses').select('*').order('date',{ascending:false}),
+      sb.from('agreements').select('*').order('date',{ascending:false}),
+      sb.from('messages').select('*').order('ts'),
+      sb.from('wishlist').select('*').order('created_at'),
+      sb.from('child_profile').select('*').limit(1).single(),
+    ]);
+    S.events    = (ev.data||[]).map(r=>({...r,from:r.from_date,to:r.to_date,changeRequest:r.change_request,changeStatus:r.change_status}));
+    S.expenses  = (ex.data||[]).map(r=>({...r,desc:r.description,paidBy:r.paid_by,liquidatedAt:r.liquidated_at,receipt:r.receipt,cuentaComun:!!r.cuenta_comun,persona:r.persona||'Martina'}));
+    S.agreements= ag.data||[];
+    S.messages  = (ms.data||[]).map(r=>({...r,from:r.from_user}));
+    S.wishlist  = (wl.data||[]).map(r=>({...r,requestedBy:r.requested_by,addedAt:r.added_at}));
+    if(ch.data) S.child = ch.data;
+  } catch(e){ console.error('loadAll core error:', e); }
+  // Notes — optional, don't crash if table missing
+  try {
+    const nt = await sb.from('notes').select('*').order('created_at',{ascending:false});
+    S.notes = nt.data||[];
+  } catch(e){ S.notes=[]; console.warn('notes table not available'); }
+  // Solicitudes — optional, don't crash if table missing
+  try {
+    const sol = await sb.from('solicitudes').select('*').order('created_at',{ascending:false});
+    S.solicitudes = sol.data||[];
+  } catch(e){ S.solicitudes=[]; console.warn('solicitudes table not available'); }
+  // Eventos de agenda — optional, don't crash if table missing
+  try {
+    const evAg = await sb.from('eventos_agenda').select('*').order('fecha',{ascending:true});
+    S.eventosAgenda = evAg.data||[];
+  } catch(e){ S.eventosAgenda=[]; console.warn('eventos_agenda table not available'); }
+}
+
+function subscribeRT(){
+  rtSubs.forEach(s=>sb.removeChannel(s));
+  rtSubs=[];
+  ['events','expenses','agreements','messages','wishlist','child_profile','notes','solicitudes','eventos_agenda'].forEach(t=>{
+    const c=sb.channel('rt-'+t).on('postgres_changes',{event:'*',schema:'public',table:t},()=>loadAll().then(render)).subscribe();
+    rtSubs.push(c);
+  });
+}
+
+// DB ops
+async function dbAddEventsBulk(arr){
+  const rows=arr.map(f=>({from_date:f.from,to_date:f.to,who:f.who,note:f.note,change_request:false,change_status:'confirmado',created_by:S.user?.role}));
+  await sb.from('events').insert(rows);
+  await loadAll(); render();
+}
+async function dbToggleExpense(id){
+  const e=S.expenses.find(x=>x.id===id);
+  const ns=e.status==='pendiente'?'liquidado':'pendiente';
+  await sb.from('expenses').update({status:ns,liquidated_at:ns==='liquidado'?new Date().toISOString():null}).eq('id',id);
+  if(ns==='liquidado') notifyOther('gasto liquidado', e.desc+' ('+fmtM(e.amount)+')', false);
+  await loadAll(); render();
+}
+async function dbAddExpense(f){
+  const {error} = await sb.from('expenses').insert({date:f.date,description:f.desc,amount:parseFloat(f.amount),cat:f.cat,paid_by:f.paidBy,split:f.split,status:f.status,note:f.note,receipt:f.receipt||null,created_by:S.user?.role,cuenta_comun:!!f.cuentaComun,persona:f.persona||'Martina'});
+  if(error) throw error;
+  logActivity('añadió','gasto',f.desc+' '+fmtM(f.amount));
+  notifyOther('nuevo gasto', f.desc+' ('+fmtM(f.amount)+', paga '+nameOf(f.paidBy)+')', true);
+  await loadAll(); render();
+}
+async function dbDelExpense(id){ await sb.from('expenses').delete().eq('id',id); await loadAll(); render(); }
+async function dbUpdExpense(id,f){
+  const {error} = await sb.from('expenses').update({date:f.date,description:f.desc,amount:parseFloat(f.amount),cat:f.cat,paid_by:f.paidBy,split:f.split,note:f.note,receipt:f.receipt||null,cuenta_comun:!!f.cuentaComun,persona:f.persona||'Martina'}).eq('id',id);
+  if(error) throw error;
+  logActivity('editó','gasto',f.desc+' '+fmtM(f.amount));
+  notifyOther('gasto corregido', f.desc+' ('+fmtM(f.amount)+')', false);
+  await loadAll(); render();
+}
+async function dbAddAgreement(f){ const {error}=await sb.from('agreements').insert({date:f.date,title:f.title,detail:f.detail,category:f.category,status:'pendiente',created_by:S.user?.role}); if(error) throw error; logActivity('propuso','acuerdo',f.title); notifyOther('nuevo acuerdo propuesto', f.title+' ('+f.category+')', true); await loadAll(); render(); }
+async function dbDelAgreement(id){ await sb.from('agreements').delete().eq('id',id); await loadAll(); render(); }
+async function dbConfirmAgreement(id){ const a=S.agreements.find(x=>x.id===id); await sb.from('agreements').update({status:'activo'}).eq('id',id); logActivity('confirmó','acuerdo',a?a.title:''); await loadAll(); render(); }
+async function dbToggleAgreement(id){ const a=S.agreements.find(x=>x.id===id); await sb.from('agreements').update({status:a.status==='activo'?'archivado':'activo'}).eq('id',id); await loadAll(); render(); }
+async function dbSendMsg(text){ await sb.from('messages').insert({from_user:S.user.role,text}); notifyOther('nuevo mensaje', text.slice(0,80)+(text.length>80?'…':''), false); await loadAll(); render(); }
+async function dbAddWish(f){ const {error}=await sb.from('wishlist').insert({item:f.item,priority:f.priority,requested_by:f.requestedBy,done:false}); if(error) throw error; notifyOther('nuevo artículo en lista de deseos', f.item, false); await loadAll(); render(); }
+async function dbDelWish(id){ await sb.from('wishlist').delete().eq('id',id); await loadAll(); render(); }
+async function dbToggleWish(id){ const w=S.wishlist.find(x=>x.id===id); await sb.from('wishlist').update({done:!w.done}).eq('id',id); await loadAll(); render(); }
+
+async function dbAddSolicitud(f){
+  const tipoInfo = SOLICITUD_TIPOS.find(t=>t.id===f.tipo);
+  const {data} = await sb.from('solicitudes').insert({
+    tipo: f.tipo,
+    tipo_label: tipoInfo.label,
+    from_date: f.from,
+    to_date: f.to||f.from,
+    motivo: f.motivo||'',
+    estado: 'pendiente',
+    from_user: S.user.role,
+    created_at: new Date().toISOString(),
+    event_id_afectado: f.eventIdAfectado||null,
+    accion: f.accion||null,
+    quien_nuevo: f.quienNuevo||null,
+  }).select().single();
+  logActivity('solicitó', 'solicitud', tipoInfo.label+' ('+fmt(f.from)+(f.to&&f.to!==f.from?'→'+fmt(f.to):'')+')');
+  await notifySolicitud(data||{tipo_label:tipoInfo.label,from_date:f.from,to_date:f.to,motivo:f.motivo,from_user:S.user.role});
+  await loadAll(); render();
+}
+async function dbRespondSolicitud(id, estado){
+  const s = S.solicitudes.find(x=>x.id===id);
+  const resuelvePor = S.user.role;
+  await sb.from('solicitudes').update({estado, resuelto_en:new Date().toISOString(), resuelto_por:resuelvePor}).eq('id',id);
+  if(s){
+    logActivity(estado==='aprobada'?'aprobó (consentimiento mutuo registrado)':'rechazó (SIN acuerdo)', 'solicitud', s.tipo_label+' — pedida por '+nameOf(s.from_user)+', resuelta por '+nameOf(resuelvePor));
+    // Si es una solicitud de modificación/cancelación de periodo y se aprueba, aplicar el cambio real
+    if(estado==='aprobada' && s.tipo==='modificar_periodo' && s.event_id_afectado){
+      if(s.accion==='cancelar'){
+        await sb.from('events').delete().eq('id', s.event_id_afectado);
+      } else {
+        await sb.from('events').update({
+          from_date: s.from_date, to_date: s.to_date,
+          who: s.quien_nuevo || undefined,
+          note: s.motivo,
+        }).eq('id', s.event_id_afectado);
+      }
+    }
+    await notifyResolucionSolicitud(s, estado, resuelvePor);
+  }
+  await loadAll(); render();
+}
+async function dbDelSolicitud(id){ await sb.from('solicitudes').delete().eq('id',id); await loadAll(); render(); }
+
+async function dbAddEventoAgenda(f){
+  const tipoInfo = EVENTO_TIPOS.find(t=>t.id===f.tipo);
+  const {error} = await sb.from('eventos_agenda').insert({
+    tipo: f.tipo, titulo: f.titulo, fecha: f.fecha, hora: f.hora||null,
+    detalle: f.detalle||'', creado_por: S.user.role, created_at: new Date().toISOString(),
+  });
+  if(error) throw error;
+  logActivity('añadió', 'evento de agenda', (tipoInfo?tipoInfo.label:f.tipo)+': '+f.titulo+' ('+fmt(f.fecha)+')');
+  await notifyOther('nuevo evento en la agenda', f.titulo+' · '+fmt(f.fecha), false);
+  await loadAll(); render();
+}
+async function dbDelEventoAgenda(id){ await sb.from('eventos_agenda').delete().eq('id',id); await loadAll(); render(); }
+
+
+async function dbSaveChild(data){ const {error}=await sb.from('child_profile').update({...data,updated_at:new Date().toISOString()}).eq('id',S.child.id); if(error) throw error; notifyOther('ficha de '+(data.name||'la menor')+' actualizada', 'Datos de la ficha modificados', false); await loadAll(); render(); }
+
+// ── PDF export ────────────────────────────────────────────────────────────────
+function exportPDF(){
+  const {expenses,events,agreements,child}=S;
+  const pend=expenses.filter(e=>e.status==='pendiente');
+  const total=expenses.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  const pendTotal=pend.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  const cd={J:0,E:0,ambos:0};
+  events.forEach(ev=>{let d=new Date(ev.from+'T12:00:00'),end=new Date(ev.to+'T12:00:00');while(d<=end){cd[ev.who]=(cd[ev.who]||0)+1;d.setDate(d.getDate()+1);}});
+  const td=cd.J+cd.E+cd.ambos;
+  const now=new Date().toLocaleDateString('es-ES');
+
+  function pendRow(e){
+    return '<tr><td>'+fmt(e.date)+'</td><td>'+e.desc+'</td><td>'+e.cat+'</td><td>'+fmtM(e.amount)+'</td><td>'+nameOf(e.paidBy)+'</td><td>'+e.split+'</td></tr>';
+  }
+  function agRow(a){
+    return '<tr><td>'+fmt(a.date)+'</td><td>'+a.category+'</td><td>'+a.title+'</td><td>'+(a.detail||'-')+'</td></tr>';
+  }
+  let pendSection = '';
+  if(pend.length>0){
+    pendSection = '<h2>Gastos pendientes</h2><table><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Importe</th><th>Paga</th><th>Reparto</th></tr>'+pend.map(pendRow).join('')+'</table>';
+  }
+  const activeAgreements = agreements.filter(a=>a.status==='activo');
+  let agSection = '';
+  if(activeAgreements.length>0){
+    agSection = '<h2>Acuerdos activos</h2><table><tr><th>Fecha</th><th>Categoría</th><th>Acuerdo</th><th>Detalle</th></tr>'+activeAgreements.map(agRow).join('')+'</table>';
+  }
+
+  const html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Informe Coparentalidad '+now+'</title>'+
+'<style>body{font-family:Arial,sans-serif;font-size:12px;color:#2B2724;margin:30px;line-height:1.6}'+
+'h1{font-size:22px;margin-bottom:4px}h2{font-size:14px;margin:22px 0 8px;border-bottom:2px solid #3B8FD9;padding-bottom:4px;color:#3B8FD9}'+
+'table{width:100%;border-collapse:collapse;margin-bottom:14px}th{background:#f8fafc;text-align:left;padding:7px 9px;font-size:11px;border:1px solid #E5E0D8;color:#8A8479}'+
+'td{padding:7px 9px;border:1px solid #E5E0D8;font-size:11px}.meta{color:#8A8479;font-size:11px;margin-bottom:24px}'+
+'.stat{display:inline-block;margin-right:28px}.stat-n{font-size:20px;font-weight:700}.stat-l{font-size:10px;color:#8A8479}'+
+'.footer{margin-top:32px;padding-top:10px;border-top:1px solid #E5E0D8;font-size:10px;color:#8A8479}</style></head>'+
+'<body><h1>🤝 Informe de Coparentalidad</h1><div class="meta">Generado el '+now+' · Jorge · Eva · '+(child.name||'Menor')+'</div>'+
+'<h2>Resumen</h2><div style="margin-bottom:18px">'+
+'<div class="stat"><div class="stat-n">'+expenses.length+'</div><div class="stat-l">Gastos</div></div>'+
+'<div class="stat"><div class="stat-n">'+fmtM(total)+'</div><div class="stat-l">Total</div></div>'+
+'<div class="stat"><div class="stat-n">'+fmtM(pendTotal)+'</div><div class="stat-l">Pendiente</div></div>'+
+'</div>'+
+pendSection+
+agSection+
+'<div class="footer">Documento de registro privado. Para uso con validez legal contactar con mediador o abogado de familia.</div></body></html>';
+
+  const w=window.open('','_blank');w.document.write(html);w.document.close();setTimeout(()=>w.print(),500);
+}
+
+// ── RENDER ROOT ───────────────────────────────────────────────────────────────
+function render(){
+  const app=document.getElementById('app');
+  app.innerHTML='';
+  document.body.className=UI.theme;
+  if(!S.user){ app.appendChild(renderLogin()); return; }
+  app.appendChild(renderShell());
+}
+function toggleTheme(){
+  UI.theme=UI.theme==='dark'?'light':'dark';
+  localStorage.setItem('cp:theme',UI.theme);
+  render();
+}
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+function renderLogin(){
+  const wrap=el('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',background:'var(--bg)'}});
+  const box=el('div',{className:'card fade-in',style:{width:340,padding:32,margin:16}});
+  const markLogin=el('div',{style:{display:'flex',justifyContent:'center',marginBottom:16}});
+  markLogin.innerHTML='<svg width="52" height="52" viewBox="0 0 40 40" fill="none"><path d="M20 10c-7 0-11 5-11 10.5S13.5 30 19 30c3 0 5-1.5 5-4s-2-4-4.5-4" stroke="#3B8FD9" stroke-width="4.4" stroke-linecap="round"/><path d="M20 30c7 0 11-5 11-10.5S26.5 10 21 10c-3 0-5 1.5-5 4s2 4 4.5 4" stroke="#F2618A" stroke-width="4.4" stroke-linecap="round"/><circle cx="20" cy="20" r="3.2" fill="#FFB238"/></svg>';
+  box.append(
+    markLogin,
+    el('div',{className:'serif',style:{fontWeight:600,fontSize:22,marginBottom:4,letterSpacing:-0.3,textAlign:'center'}},'Coparentalidad'),
+    el('div',{style:{color:'var(--ink-soft)',fontSize:13,marginBottom:28,textAlign:'center'}},'Acceso privado · Jorge y Eva'),
+  );
+
+  const emailWrap=el('div',{style:{marginBottom:12}});
+  emailWrap.appendChild(lbl('Email'));
+  const emailInp=el('input',{type:'email',className:'input',placeholder:'tu@email.com',autocomplete:'email'});
+  emailInp.value=UI.loginEmail||'';
+  emailInp.addEventListener('input',e=>UI.loginEmail=e.target.value);
+  emailWrap.appendChild(emailInp);
+
+  const passWrap=el('div',{style:{marginBottom:20}});
+  passWrap.appendChild(lbl('Contraseña'));
+  const passInp=el('input',{type:'password',className:'input',placeholder:'••••••••',autocomplete:'current-password'});
+  passInp.addEventListener('input',e=>UI.loginPass=e.target.value);
+  passInp.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+  passWrap.appendChild(passInp);
+
+  const errDiv=el('div',{id:'loginErr',style:{color:'var(--alert)',fontSize:12,marginBottom:12,minHeight:16,textAlign:'center'}},UI.loginError||'');
+
+  const loginBtn=el('button',{className:'btn-primary',style:{width:'100%',padding:13,fontSize:14},id:'loginBtn',onClick:doLogin},'Entrar');
+
+  async function doLogin(){
+    const btn=document.getElementById('loginBtn');
+    const err=document.getElementById('loginErr');
+    if(!UI.loginEmail||!UI.loginPass){ err.textContent='Introduce email y contraseña'; return; }
+    btn.disabled=true; btn.textContent='Entrando…'; err.textContent='';
+    try {
+      const {data,error} = await sb.auth.signInWithPassword({email:UI.loginEmail.trim(),password:UI.loginPass});
+      if(error){ err.textContent='Email o contraseña incorrectos'; btn.disabled=false; btn.textContent='Entrar'; return; }
+      await onAuthenticated(data.user);
+    } catch(e){
+      err.textContent='Error de conexión. Inténtalo de nuevo.';
+      btn.disabled=false; btn.textContent='Entrar';
+    }
+  }
+
+  box.append(emailWrap,passWrap,errDiv,loginBtn);
+
+  // Forgot password
+  const forgotBtn=el('button',{style:{background:'none',border:'none',color:'var(--jorge)',fontSize:12,marginTop:14,width:'100%',textAlign:'center',cursor:'pointer',textDecoration:'underline'},onClick:async()=>{
+    const err=document.getElementById('loginErr');
+    if(!UI.loginEmail||!UI.loginEmail.includes('@')){ err.textContent='Escribe tu email arriba y vuelve a pulsar'; return; }
+    err.style.color='var(--ink-soft)';
+    err.textContent='Enviando…';
+    try {
+      const {error} = await sb.auth.resetPasswordForEmail(UI.loginEmail.trim(), {redirectTo: window.location.origin + window.location.pathname});
+      if(error){ err.style.color='var(--alert)'; err.textContent='No se pudo enviar. Revisa el email.'; return; }
+      err.style.color='var(--ambos)';
+      err.textContent='✓ Revisa tu correo. Te llegará un enlace para crear una contraseña nueva.';
+    } catch(e){ err.style.color='var(--alert)'; err.textContent='Error de conexión.'; }
+  }},'He olvidado mi contraseña');
+  box.appendChild(forgotBtn);
+
+  box.appendChild(el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginTop:16,textAlign:'center',lineHeight:1.5}},'Cada usuario accede con su propia cuenta verificada. Los mensajes quedan ligados a la identidad real y no pueden editarse ni borrarse.'));
+  wrap.appendChild(box);
+  return wrap;
+}
+
+async function onAuthenticated(authUser){
+  // Fetch role from profiles
+  const {data:prof} = await sb.from('profiles').select('*').eq('id',authUser.id).single();
+  if(!prof){
+    alert('Tu usuario no tiene perfil asignado. Contacta con el administrador.');
+    await sb.auth.signOut();
+    return;
+  }
+  S.user = {role:prof.role, name:prof.name, email:authUser.email, uid:authUser.id};
+  UI.loginPass='';
+  await loadAll();
+  render();
+  subscribeRT();
+  try{ await checkAndSendUpcomingReminders(); }catch(e){}
+}
+
+// ── SHELL ─────────────────────────────────────────────────────────────────────
+function renderShell(){
+  const wrap=el('div',{});
+
+  // Balance
+  const pend=S.expenses.filter(e=>e.status==='pendiente');
+  const bal={J:0,E:0};
+  pend.forEach(e=>{
+    if(e.cuentaComun) return; // pagado con cargo a la cuenta común, no genera deuda entre progenitores
+    const a=parseFloat(e.amount||0);
+    if(e.split==='50-50'){const h=a/2;if(e.paidBy==='J')bal.E+=h;else bal.J+=h;}
+    else if(e.split==='100% Jorge'){if(e.paidBy==='E')bal.J+=a;}
+    else if(e.split==='100% Eva'){if(e.paidBy==='J')bal.E+=a;}
+  });
+  const diff=bal.E-bal.J;
+
+  // Alerts
+  const alerts=[];
+  S.expenses.filter(e=>e.status==='pendiente').forEach(e=>{const age=Math.round((Date.now()-new Date(e.date+'T12:00:00'))/86400000);if(age>=14)alerts.push('"'+e.desc+'" — '+age+'d pendiente');});
+  const custodyOn = ds => { const e=S.events.find(ev=>ev.from<=ds&&ev.to>=ds&&ev.changeStatus!=='rechazado'); return e?e.who:null; };
+  S.events.forEach(ev=>{
+    if(ev.changeStatus==='rechazado') return;
+    const d=daysUntil(ev.from);
+    if(d>=0&&d<=2&&custodyOn(addDays(ev.from,-1))!==ev.who) alerts.push('Cambio de custodia '+(d===0?'HOY':'en '+d+'d')+' → '+nameOf(ev.who));
+  });
+  S.events.filter(ev=>ev.changeStatus==='pendiente').forEach(()=>alerts.push('Solicitud de cambio pendiente de confirmar'));
+  S.solicitudes.filter(s=>s.estado==='pendiente'&&s.from_user!==S.user.role).forEach(s=>{
+    const tipoInfo=SOLICITUD_TIPOS.find(t=>t.id===s.tipo);
+    alerts.push('📋 '+nameOf(s.from_user)+' pide: '+(tipoInfo?tipoInfo.label:s.tipo));
+  });
+
+  // Header
+  const hdr=el('div',{className:'header'});
+  const hL=el('div',{style:{display:'flex',alignItems:'center',gap:12}});
+  const markMain=el('span',{});
+  markMain.innerHTML='<svg width="30" height="30" viewBox="0 0 40 40" fill="none"><path d="M20 10c-7 0-11 5-11 10.5S13.5 30 19 30c3 0 5-1.5 5-4s-2-4-4.5-4" stroke="#3B8FD9" stroke-width="4.4" stroke-linecap="round"/><path d="M20 30c7 0 11-5 11-10.5S26.5 10 21 10c-3 0-5 1.5-5 4s2 4 4.5 4" stroke="#F2618A" stroke-width="4.4" stroke-linecap="round"/><circle cx="20" cy="20" r="3.2" fill="#FFB238"/></svg>';
+  hL.append(markMain,el('div',{}));
+  hL.children[1].append(
+    el('div',{className:'serif',style:{fontWeight:600,fontSize:15,letterSpacing:-0.2}},'Coparentalidad'),
+    el('div',{style:{color:'var(--ink-soft)',fontSize:11}},'Usuario: '+S.user.name)
+  );
+  const hR=el('div',{style:{display:'flex',gap:8,alignItems:'center'}});
+  if(Math.abs(diff)>0.01) hR.appendChild(badge(diff>0?'Eva debe '+fmtM(diff):'Jorge debe '+fmtM(Math.abs(diff)),'badge-warn'));
+  hR.append(
+    el('button',{className:'btn-ghost',style:{fontSize:13,padding:'6px 10px'},onClick:()=>{UI.searchOpen=!UI.searchOpen;UI.searchQuery='';render();}},iconEl('search')),
+    el('button',{className:'btn-ghost',style:{fontSize:13,padding:'6px 10px'},title:'Ficha de '+(S.child.name||'Martina'),onClick:()=>{UI.showFichaModal=true;render();}},iconEl('child')),
+    el('button',{className:'btn-ghost',style:{fontSize:13,padding:'6px 10px'},onClick:toggleTheme},iconEl(UI.theme==='dark'?'sun':'moon')),
+    el('button',{className:'btn-ghost',style:{fontSize:13,padding:'6px 10px'},title:'Exportar informe',onClick:exportPDF},iconEl('pdf')),
+    el('button',{className:'btn-ghost',style:{fontSize:13,padding:'6px 10px'},title:'Cambiar contraseña',onClick:()=>{UI.showPassModal=true;UI.newPass1='';UI.newPass2='';render();}},iconEl('key')),
+    el('button',{className:'btn-ghost',style:{fontSize:11,padding:'6px 10px'},onClick:async()=>{await sb.auth.signOut();S.user=null;rtSubs.forEach(s=>sb.removeChannel(s));render();}},'Salir')
+  );
+  hdr.append(hL,hR);
+
+  // Alert bar
+  let alertEl=null;
+  if(alerts.length){
+    alertEl=el('div',{className:'alert-bar'});
+    alertEl.appendChild(el('span',{style:{fontSize:14,flexShrink:0}},'⚠️'));
+    const aw=el('div',{style:{display:'flex',gap:8,overflowX:'auto'}});
+    alerts.forEach(a=>aw.appendChild(el('span',{className:'alert-pill'},a)));
+    alertEl.appendChild(aw);
+  }
+
+  // Tabs
+  const TABS=[
+    {label:'Inicio', icon:ICONS.home, c:'home'},
+    {label:'Calendario', icon:ICONS.calendar, c:'cal'},
+    {label:'Gastos', icon:ICONS.euro, c:'money'},
+    {label:'Mensajes', icon:ICONS.message, c:'msg'},
+    {label:'Acuerdos', icon:ICONS.doc, c:'agree'},
+    {label:'Intercambio', icon:ICONS.swap, c:'exchange'},
+    {label:'Stats', icon:ICONS.chart, c:'stats'},
+  ];
+
+  // Search overlay
+  let searchEl=null;
+  if(UI.searchOpen){
+    searchEl=el('div',{style:{background:'var(--bg,var(--bg))',borderBottom:'1px solid var(--line)',padding:'12px 16px'}});
+    const si=el('input',{className:'input',placeholder:'Buscar en gastos, acuerdos, mensajes…',style:{marginBottom:UI.searchQuery?12:0}});
+    si.value=UI.searchQuery;
+    si.addEventListener('input',e=>{UI.searchQuery=e.target.value;render();});
+    setTimeout(()=>si.focus(),50);
+    searchEl.appendChild(si);
+    if(UI.searchQuery.trim().length>1){
+      const q=UI.searchQuery.toLowerCase();
+      const results=[];
+      S.expenses.filter(e=>e.desc?.toLowerCase().includes(q)||e.cat?.toLowerCase().includes(q)||e.note?.toLowerCase().includes(q)).forEach(e=>results.push({type:'💶 Gasto',title:e.desc,sub:fmtM(e.amount)+' · '+fmt(e.date),onClick:()=>{S.tab=2;UI.searchOpen=false;render();}}));
+      S.agreements.filter(a=>a.title?.toLowerCase().includes(q)||a.detail?.toLowerCase().includes(q)||a.category?.toLowerCase().includes(q)).forEach(a=>results.push({type:'📝 Acuerdo',title:a.title,sub:a.category+' · '+fmt(a.date),onClick:()=>{S.tab=4;UI.searchOpen=false;render();}}));
+      S.messages.filter(m=>m.text?.toLowerCase().includes(q)).forEach(m=>results.push({type:'💬 Mensaje',title:m.text.slice(0,60)+(m.text.length>60?'…':''),sub:nameOf(m.from)+' · '+new Date(m.ts).toLocaleDateString('es-ES'),onClick:()=>{S.tab=3;UI.searchOpen=false;render();}}));
+      S.events.filter(ev=>ev.note?.toLowerCase().includes(q)).forEach(ev=>results.push({type:'📅 Custodia',title:ev.note,sub:nameOf(ev.who)+' · '+fmt(ev.from)+'→'+fmt(ev.to),onClick:()=>{S.tab=1;UI.searchOpen=false;render();}}));
+      if(!results.length){
+        searchEl.appendChild(el('div',{style:{color:'var(--ink-soft)',fontSize:13,padding:'8px 0'}},'Sin resultados'));
+      } else {
+        const rl=el('div',{style:{maxHeight:260,overflowY:'auto'}});
+        results.slice(0,12).forEach(r=>{
+          const row=el('div',{style:{display:'flex',gap:10,padding:'9px 0',borderBottom:'1px solid var(--paper)',cursor:'pointer',alignItems:'start'},onClick:r.onClick});
+          row.append(
+            el('span',{style:{fontSize:10,background:'var(--paper)',borderRadius:6,padding:'3px 7px',flexShrink:0,color:'var(--ink-soft)',whiteSpace:'nowrap'}},r.type),
+            el('div',{},[el('div',{style:{fontSize:13,fontWeight:600,marginBottom:2}},r.title),el('div',{style:{fontSize:11,color:'var(--ink-soft)'}},r.sub)])
+          );
+          rl.appendChild(row);
+        });
+        if(results.length>12) rl.appendChild(el('div',{style:{fontSize:11,color:'var(--ink-soft)',padding:'6px 0'}},'+'+(results.length-12)+' más'));
+        searchEl.appendChild(rl);
+      }
+    }
+  }
+
+  // Weekly summary banner
+  const mon=new Date(); mon.setHours(12,0,0,0);
+  const dow=mon.getDay(); const diff2=dow===0?-6:1-dow;
+  mon.setDate(mon.getDate()+diff2);
+  const monStr=mon.toISOString().slice(0,10);
+  let summaryEl=null;
+  if(dow>=1 && UI.summaryDismissed!==monStr){
+    const prevMon=addDays(monStr,-7);
+    const prevSun=addDays(monStr,-1);
+    const weekExp=S.expenses.filter(e=>e.date>=prevMon&&e.date<=prevSun);
+    const weekEvs=S.events.filter(ev=>ev.from>=prevMon&&ev.from<=prevSun&&ev.changeStatus!=='rechazado');
+    const weekTotal=weekExp.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+    const weekPend=weekExp.filter(e=>e.status==='pendiente').reduce((s,e)=>s+parseFloat(e.amount||0),0);
+    if(weekExp.length>0||weekEvs.length>0){
+      summaryEl=el('div',{style:{background:'var(--ambos-soft)',borderBottom:'1px solid var(--ambos)',padding:'10px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:12}});
+      const txt=el('div',{});
+      txt.appendChild(titleIcon('check','Resumen semana anterior',{fontSize:12,fontWeight:700,color:'var(--ambos)',marginBottom:3}));
+      const parts=[];
+      if(weekExp.length) parts.push(weekExp.length+' gastos ('+fmtM(weekTotal)+(weekPend>0?' · '+fmtM(weekPend)+' pendiente':'')+')');
+      if(weekEvs.length) parts.push(weekEvs.length+' cambio'+(weekEvs.length>1?'s':'')+' de custodia');
+      txt.appendChild(el('div',{style:{fontSize:11,color:'var(--ambos)'}},parts.join(' · ')));
+      const closeBtn=el('button',{style:{background:'none',border:'none',color:'var(--ink-soft)',fontSize:16,cursor:'pointer',flexShrink:0},onClick:()=>{UI.summaryDismissed=monStr;localStorage.setItem('cp:summaryDismissed',monStr);render();}},'✕');
+      summaryEl.append(txt,closeBtn);
+    }
+  }
+
+  const content=el('div',{className:'content fade-in'});
+  if(S.tab===0) content.appendChild(renderDashboard(diff));
+  if(S.tab===1) content.appendChild(renderCustodia());
+  if(S.tab===2) content.appendChild(renderGastos(diff));
+  if(S.tab===3) content.appendChild(renderMensajes());
+  if(S.tab===4) content.appendChild(renderAcuerdos());
+  if(S.tab===5) content.appendChild(renderIntercambio());
+  if(S.tab===6) content.appendChild(renderStats());
+
+  wrap.append(hdr);
+  if(alertEl) wrap.append(alertEl);
+  if(summaryEl) wrap.append(summaryEl);
+  if(searchEl) wrap.append(searchEl);
+
+  // Barra de navegación superior — texto completo, con scroll horizontal si no cabe
+  const tabBar=el('div',{className:'tab-bar'});
+  TABS.forEach((t,i)=>{
+    const btn=el('button',{className:'tab-btn'+(S.tab===i?' active':''),onClick:()=>{S.tab=i;render();}});
+    btn.setAttribute('data-c', t.c);
+    const badge=el('span',{className:'icon-badge'});
+    badge.innerHTML=t.icon;
+    btn.append(badge, document.createTextNode(t.label));
+    tabBar.appendChild(btn);
+  });
+  const tabBarWrap=el('div',{className:'tab-bar-wrap'});
+  tabBarWrap.appendChild(tabBar);
+  wrap.append(tabBarWrap,content);
+
+  // Password change modal
+  if(UI.showPassModal){
+    const overlay=el('div',{style:{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:16},onClick:e=>{if(e.target===e.currentTarget){UI.showPassModal=false;render();}}});
+    const modal=el('div',{className:'card',style:{width:320,padding:24}});
+    modal.appendChild(el('div',{style:{fontWeight:700,fontSize:16,marginBottom:6}},'🔑 Cambiar contraseña'));
+    modal.appendChild(el('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:16}},'Cuenta: '+(S.user.email||'')));
+
+    const p1Wrap=el('div',{style:{marginBottom:10}});
+    p1Wrap.appendChild(lbl('Nueva contraseña'));
+    const p1=el('input',{type:'password',className:'input',placeholder:'Mínimo 6 caracteres',autocomplete:'new-password'});
+    p1.addEventListener('input',e=>UI.newPass1=e.target.value);
+    p1Wrap.appendChild(p1);
+
+    const p2Wrap=el('div',{style:{marginBottom:14}});
+    p2Wrap.appendChild(lbl('Repite la contraseña'));
+    const p2=el('input',{type:'password',className:'input',placeholder:'••••••••',autocomplete:'new-password'});
+    p2.addEventListener('input',e=>UI.newPass2=e.target.value);
+    p2Wrap.appendChild(p2);
+
+    const errP=el('div',{id:'passErr',style:{fontSize:12,minHeight:16,marginBottom:10,textAlign:'center',color:'var(--alert)'}},'');
+
+    const saveP=el('button',{className:'btn-primary',style:{width:'100%'},id:'passBtn',onClick:async()=>{
+      const err=document.getElementById('passErr');
+      const btn=document.getElementById('passBtn');
+      if(!UI.newPass1||UI.newPass1.length<6){ err.textContent='Mínimo 6 caracteres'; return; }
+      if(UI.newPass1!==UI.newPass2){ err.textContent='Las contraseñas no coinciden'; return; }
+      btn.disabled=true; btn.textContent='Guardando…'; err.textContent='';
+      try {
+        const {error} = await sb.auth.updateUser({password:UI.newPass1});
+        if(error){ err.textContent='Error: '+error.message; btn.disabled=false; btn.textContent='Cambiar contraseña'; return; }
+        err.style.color='var(--ambos)';
+        err.textContent='✓ Contraseña cambiada correctamente';
+        setTimeout(()=>{UI.showPassModal=false;render();},1500);
+      } catch(e){ err.textContent='Error de conexión'; btn.disabled=false; btn.textContent='Cambiar contraseña'; }
+    }},'Cambiar contraseña');
+
+    const cancelP=el('button',{className:'btn-ghost',style:{width:'100%',marginTop:8},onClick:()=>{UI.showPassModal=false;render();}},'Cancelar');
+
+    modal.append(p1Wrap,p2Wrap,errP,saveP,cancelP);
+    overlay.appendChild(modal);
+    wrap.appendChild(overlay);
+  }
+
+  // Ficha modal
+  if(UI.showFichaModal){
+    const overlayF=el('div',{style:{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:16,overflowY:'auto'},onClick:e=>{if(e.target===e.currentTarget){UI.showFichaModal=false;render();}}});
+    const modalF=el('div',{style:{width:'100%',maxWidth:420,maxHeight:'85vh',overflowY:'auto'}});
+    const closeRow=el('div',{style:{display:'flex',justifyContent:'flex-end',marginBottom:8}});
+    closeRow.appendChild(el('button',{className:'btn-ghost',style:{fontSize:13,padding:'6px 10px'},onClick:()=>{UI.showFichaModal=false;render();}},'Cerrar'));
+    modalF.append(closeRow,renderFicha());
+    overlayF.appendChild(modalF);
+    wrap.appendChild(overlayF);
+  }
+
+  return wrap;
+}
+
+
+// ── Festivos Santa Cruz de Tenerife 2025-2027 ─────────────────────────────────
+// Fuente: BOE (nacionales) + BOC Decreto 61/2025 y Orden 6-ago-2025 (autonómicos/locales Santa Cruz de Tenerife)
+const FESTIVOS = {
+  // ── 2025 ──
+  '2025-01-01':'Año Nuevo (nacional)',
+  '2025-01-06':'Reyes Magos (nacional)',
+  '2025-04-17':'Jueves Santo (autonómico)',
+  '2025-04-18':'Viernes Santo (nacional)',
+  '2025-05-01':'Día del Trabajo (nacional)',
+  '2025-05-30':'Día de Canarias (autonómico)',
+  '2025-08-15':'Asunción de la Virgen (nacional)',
+  '2025-10-12':'Fiesta Nacional (nacional)',
+  '2025-11-01':'Todos los Santos (nacional)',
+  '2025-12-06':'Día de la Constitución (nacional)',
+  '2025-12-08':'Inmaculada Concepción (nacional)',
+  '2025-12-25':'Navidad (nacional)',
+  '2025-02-03':'Virgen de la Candelaria (insular Tenerife)',
+  '2025-02-28':'Carnaval (festivo local Santa Cruz)',
+  '2025-03-04':'Martes de Carnaval (festivo local Santa Cruz)',
+  // ── 2026 ──
+  '2026-01-01':'Año Nuevo (nacional)',
+  '2026-01-06':'Reyes Magos (nacional)',
+  '2026-04-02':'Jueves Santo (autonómico)',
+  '2026-04-03':'Viernes Santo (nacional)',
+  '2026-05-01':'Día del Trabajo (nacional)',
+  '2026-05-30':'Día de Canarias (autonómico)',
+  '2026-08-15':'Asunción de la Virgen (nacional)',
+  '2026-10-12':'Fiesta Nacional (nacional)',
+  '2026-11-02':'Todos los Santos (nacional, traslado del 1-nov por domingo)',
+  '2026-12-06':'Día de la Constitución (nacional)',
+  '2026-12-08':'Inmaculada Concepción (nacional)',
+  '2026-12-25':'Navidad (nacional)',
+  '2026-02-03':'Virgen de la Candelaria (insular Tenerife)',
+  '2026-02-17':'Martes de Carnaval (festivo local Santa Cruz)',
+  '2026-05-04':'Día de la Cruz (festivo local Santa Cruz)',
+  // ── 2027 ──
+  '2027-01-01':'Año Nuevo (nacional)',
+  '2027-01-06':'Reyes Magos (nacional)',
+  '2027-03-25':'Jueves Santo (autonómico)',
+  '2027-03-26':'Viernes Santo (nacional)',
+  '2027-05-01':'Día del Trabajo (nacional)',
+  '2027-05-30':'Día de Canarias (autonómico)',
+  '2027-08-16':'Asunción de la Virgen (nacional, traslado del 15-ago por domingo)',
+  '2027-10-12':'Fiesta Nacional (nacional)',
+  '2027-11-01':'Todos los Santos (nacional)',
+  '2027-12-06':'Día de la Constitución (nacional)',
+  '2027-12-08':'Inmaculada Concepción (nacional)',
+  '2027-12-25':'Navidad (nacional)',
+  '2027-02-03':'Virgen de la Candelaria (insular Tenerife)',
+  // Carnaval y Día de la Cruz 2027 en Santa Cruz: pendientes de publicación oficial en BOC, añadir cuando se confirmen
+};
+function isFestivo(dateStr){ return !!FESTIVOS[dateStr]; }
+function festivoName(dateStr){ return FESTIVOS[dateStr]||''; }
+
+// ── Calendario lectivo del colegio de Martina ──────────────────────────────
+// Rellenar con el calendario oficial del centro cuando esté disponible.
+// Formato: 'YYYY-MM-DD': 'Descripción' (día no lectivo, inicio/fin de trimestre, etc.)
+const CALENDARIO_LECTIVO = {
+  // Ejemplo: '2026-09-10': 'Inicio de curso',
+};
+function isDiaLectivoEspecial(dateStr){ return !!CALENDARIO_LECTIVO[dateStr]; }
+function diaLectivoNombre(dateStr){ return CALENDARIO_LECTIVO[dateStr]||''; }
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+function renderDashboard(diff){
+  const wrap=el('div',{});
+  const todayStr=today();
+
+  // Who has Martina today
+  const todayEv=S.events.find(ev=>ev.from<=todayStr&&ev.to>=todayStr&&ev.changeStatus!=='rechazado');
+  const nextEv=[...S.events].filter(ev=>ev.from>todayStr&&ev.changeStatus!=='rechazado').sort((a,b)=>a.from.localeCompare(b.from))[0];
+
+  // Today card
+  const tc=el('div',{className:'today-card',style:{position:'relative'}});
+  tc.append(titleIcon('clock','Hoy · '+new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'}),{fontSize:11,color:'var(--ink-soft)',marginBottom:8,textTransform:'uppercase',letterSpacing:0.5}));
+  if(todayEv){
+    tc.append(
+      el('div',{style:{fontWeight:800,fontSize:22,marginBottom:4,color:CUSTODY_TEXT[todayEv.who]}}, (S.child.name||'Martina')+' está con '+nameOf(todayEv.who)),
+      el('div',{style:{fontSize:13,color:'var(--ink-soft)'}},'hasta el '+(fmt(todayEv.to))+(todayEv.note?' · '+todayEv.note:'')+'')
+    );
+  } else {
+    tc.appendChild(el('div',{style:{fontWeight:700,fontSize:18,color:'var(--ink-soft)'}},'Sin custodia registrada hoy'));
+  }
+  if(nextEv){
+    tc.append(el('div',{style:{marginTop:12,paddingTop:12,borderTop:'1px solid var(--line)',fontSize:12,color:'var(--ink-soft)'}},[
+      el('span',{},'Próximo cambio: '),
+      el('span',{style:{color:CUSTODY_TEXT[nextEv.who],fontWeight:600}},nameOf(nextEv.who)),
+      el('span',{},' el '+(fmt(nextEv.from))+' ('+(daysUntil(nextEv.from)===0?'hoy':daysUntil(nextEv.from)===1?'mañana':'en '+daysUntil(nextEv.from)+'d')+')')
+    ]));
+  }
+  wrap.appendChild(tc);
+
+  // Recordatorios pendientes — con el detalle de qué se trata, no solo un número
+  const pend=S.expenses.filter(e=>e.status==='pendiente');
+  const solicitudesPropias=S.solicitudes.filter(s=>s.estado==='pendiente'&&s.from_user===S.user.role);
+  const solicitudesOtro=S.solicitudes.filter(s=>s.estado==='pendiente'&&s.from_user!==S.user.role);
+  const acuerdosPropios=S.agreements.filter(a=>a.status==='pendiente'&&a.created_by===S.user.role);
+  const acuerdosOtro=S.agreements.filter(a=>a.status==='pendiente'&&a.created_by!==S.user.role);
+
+  function reminderBlock(items, tab, icon, color, getLabel, getDetail){
+    if(!items.length) return null;
+    const b=el('div',{style:{padding:'10px 0',borderBottom:'1px solid var(--line)',cursor:'pointer'},onClick:()=>{S.tab=tab;render();}});
+    const head=el('div',{style:{display:'flex',alignItems:'center',gap:10}});
+    const badge2=el('span',{className:'icon-badge',style:{width:26,height:26,color:color,background:color+'22',flexShrink:0}});
+    badge2.innerHTML=ICONS[icon]||'';
+    head.append(badge2,el('div',{style:{fontSize:13,fontWeight:600,flex:1}},getLabel(items)));
+    b.appendChild(head);
+    const first=items[0];
+    b.appendChild(el('div',{style:{fontSize:12,color:'var(--ink-soft)',marginTop:4,paddingLeft:36}},getDetail(first)+(items.length>1?' · +'+(items.length-1)+' más':'')));
+    return b;
+  }
+
+  const reminderBlocks=[
+    reminderBlock(solicitudesOtro,1,'clipboard','var(--eva)',
+      it=>it.length+' solicitud'+(it.length>1?'es':'')+' esperando tu respuesta',
+      s=>{const t=SOLICITUD_TIPOS.find(x=>x.id===s.tipo);return (t?t.label:s.tipo)+' · '+nameOf(s.from_user);}),
+    reminderBlock(solicitudesPropias,1,'clipboard','var(--ink-soft)',
+      it=>it.length+' solicitud'+(it.length>1?'es':'')+' tuya'+(it.length>1?'s':'')+' esperando al otro',
+      s=>{const t=SOLICITUD_TIPOS.find(x=>x.id===s.tipo);return t?t.label:s.tipo;}),
+    reminderBlock(pend,2,'wallet','var(--alert)',
+      it=>it.length+' gasto'+(it.length>1?'s':'')+' pendiente'+(it.length>1?'s':'')+' de confirmar',
+      e=>e.desc+' · '+fmtM(e.amount)+' · Paga '+nameOf(e.paidBy)),
+    reminderBlock(acuerdosOtro,4,'doc','var(--eva)',
+      it=>it.length+' acuerdo'+(it.length>1?'s':'')+' esperando tu confirmación',
+      a=>a.title),
+    reminderBlock(acuerdosPropios,4,'doc','var(--ink-soft)',
+      it=>it.length+' acuerdo'+(it.length>1?'s':'')+' tuyo'+(it.length>1?'s':'')+' esperando al otro',
+      a=>a.title),
+  ].filter(Boolean);
+
+  if(reminderBlocks.length){
+    const rc=el('div',{className:'card',style:{marginBottom:16}});
+    reminderBlocks.forEach((b,i)=>{ if(i===reminderBlocks.length-1) b.style.borderBottom='none'; rc.appendChild(b); });
+    wrap.appendChild(rc);
+  }
+
+  // Balance card
+  if(Math.abs(diff)>0.01){
+    const bc=el('div',{className:'card',style:{borderColor:'var(--alert)',background:'var(--alert-soft)',marginBottom:12}});
+    bc.append(
+      titleIcon('wallet','Saldo pendiente',{fontSize:11,color:'var(--alert)',marginBottom:6,textTransform:'uppercase',letterSpacing:.5}),
+      el('div',{style:{fontWeight:800,fontSize:20,color:'var(--alert)'}},diff>0?'Eva debe '+(fmtM(Math.abs(diff)))+'':'Jorge debe '+(fmtM(Math.abs(diff)))+''),
+      el('div',{style:{fontSize:12,color:'var(--ink-soft)',marginTop:4}}, pend.length+' gastos · '+(fmtM(pend.reduce((s,e)=>s+parseFloat(e.amount||0),0)))+'')
+    );
+    wrap.appendChild(bc);
+  }
+
+  // Notas y mensajes no vistos — con el contenido real, no solo el conteo
+  const lastSeen=getLastSeenMessages();
+  const notasNoVistas=S.notes.filter(n=>!lastSeen||n.created_at>lastSeen);
+  const mensajesNoVistos=S.messages.filter(m=>(!lastSeen||m.ts>lastSeen)&&m.from!==S.user.role);
+  if(notasNoVistas.length||mensajesNoVistos.length){
+    const nc=el('div',{className:'card',style:{marginBottom:12,cursor:'pointer'},onClick:()=>{S.tab=3;render();}});
+    nc.appendChild(titleIcon('message','Mensajes y notas nuevas',{fontWeight:700,fontSize:14,marginBottom:8}));
+    if(mensajesNoVistos.length){
+      const m=mensajesNoVistos[mensajesNoVistos.length-1];
+      nc.appendChild(el('div',{style:{fontSize:13,color:'var(--ink)',marginBottom:2}},nameOf(m.from)+': "'+m.text.slice(0,70)+(m.text.length>70?'…':'')+'"'));
+      if(mensajesNoVistos.length>1) nc.appendChild(el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginBottom:6}},'+'+(mensajesNoVistos.length-1)+' mensaje'+(mensajesNoVistos.length>2?'s':'')+' más'));
+    }
+    if(notasNoVistas.length){
+      const n=notasNoVistas[0];
+      nc.appendChild(el('div',{style:{fontSize:13,color:'var(--ink)',marginTop:mensajesNoVistos.length?6:0}},(n.from_user==='J'?'Jorge':'Eva')+': "'+n.text.slice(0,70)+(n.text.length>70?'…':'')+'"'));
+      if(notasNoVistas.length>1) nc.appendChild(el('div',{style:{fontSize:11,color:'var(--ink-soft)'}},'+'+(notasNoVistas.length-1)+' nota'+(notasNoVistas.length>2?'s':'')+' más'));
+    }
+    wrap.appendChild(nc);
+  }
+
+  return wrap;
+}
+
+// ── CUSTODIA ──────────────────────────────────────────────────────────────────
+function renderCustodia(){
+  const wrap=el('div',{});
+
+  // View toggle
+  const tgl=el('div',{className:'toggle-row'});
+  [['month','Mes'],['week','Semana']].forEach(([v,l])=>{
+    tgl.appendChild(el('button',{className:'toggle-btn'+(UI.calView===v?' active':''),onClick:()=>{UI.calView=v;render();}},l));
+  });
+  wrap.appendChild(tgl);
+
+  if(UI.calView==='month') wrap.appendChild(renderCalMonth());
+  else wrap.appendChild(renderCalWeek());
+
+  // Selected event detail
+  if(UI.calSelected){
+    const s=UI.calSelected;
+    const sc=el('div',{className:'card fade-in',style:{borderLeft:'3px solid '+(CUSTODY_TEXT[s.who])+'',marginBottom:12}});
+    const top=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'start'}});
+    const info=el('div',{style:{flex:1}});
+    info.append(
+      el('div',{style:{fontWeight:700,fontSize:14,color:CUSTODY_TEXT[s.who],marginBottom:4}},nameOf(s.who)+': '+fmt(s.from)+' → '+fmt(s.to)+' · '+(daysBetween(s.from,s.to))+'d'),
+    );
+    if(s.note) info.appendChild(el('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:4}},s.note));
+    if(s.changeStatus==='pendiente') info.appendChild(el('div',{style:{background:'var(--alert-soft)',color:'var(--alert)',borderRadius:8,padding:'5px 10px',fontSize:11,marginBottom:6}},'⏳ Solicitud pendiente de confirmar'));
+    const btns=el('div',{style:{display:'flex',gap:6,flexShrink:0,flexWrap:'wrap',justifyContent:'flex-end'}});
+    const btnEditPeriod=el('button',{className:'btn-ghost',style:{fontSize:11,padding:'5px 8px',background:'var(--jorge-soft)',color:'var(--jorge)',display:'flex',alignItems:'center',gap:5},onClick:()=>{
+      UI.showSolicitudForm=true;UI.solicitudTipo='modificar_periodo';
+      UI.solicitudForm={
+        from:s.from, to:s.to, motivo:'',
+        eventIdAfectado:s.id, accion:'editar', quienNuevo:s.who,
+        aiText:'', aiLoading:false
+      };
+      UI.calSelected=null;render();
+      setTimeout(()=>{const el2=document.querySelector('.content');if(el2)el2.scrollIntoView({behavior:'smooth',block:'start'});},100);
+    }});
+    const icoEd=el('span',{style:{display:'inline-flex',width:13,height:13}});
+    icoEd.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 2h6l1 3h4v16H4V5h4l1-3z"/><path d="M9 12l2 2 4-4"/></svg>';
+    btnEditPeriod.append(icoEd, document.createTextNode('Solicitar cambio de este periodo'));
+    btns.appendChild(btnEditPeriod);
+    btns.appendChild(el('button',{className:'btn-ghost',style:{fontSize:11,padding:'5px 8px'},onClick:()=>{UI.calSelected=null;render();}},'Cerrar'));
+    top.append(info,btns);sc.appendChild(top);wrap.appendChild(sc);
+  }
+
+  // Eventos de agenda seleccionados desde el calendario
+  if(UI.calSelectedEventos && UI.calSelectedEventos.length){
+    UI.calSelectedEventos.forEach(ev=>{
+      const tipoInfo=EVENTO_TIPOS.find(t=>t.id===ev.tipo)||EVENTO_TIPOS[EVENTO_TIPOS.length-1];
+      const sc2=el('div',{className:'card fade-in',style:{borderLeft:'3px solid '+tipoInfo.color,marginBottom:10}});
+      const top2=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'start'}});
+      const info2=el('div',{style:{flex:1}});
+      info2.append(titleIcon(tipoInfo.iconKey, ev.titulo, {fontWeight:700,fontSize:14,color:tipoInfo.color,marginBottom:4}));
+      info2.appendChild(el('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:4}},fmt(ev.fecha)+(ev.hora?' · '+ev.hora:'')));
+      if(ev.detalle) info2.appendChild(el('div',{style:{fontSize:12,color:'var(--ink-soft)'}},ev.detalle));
+      const del2=el('button',{className:'btn-ghost',style:{fontSize:11,padding:'5px 8px'},onClick:()=>{dbDelEventoAgenda(ev.id);UI.calSelectedEventos=null;}},'Borrar');
+      top2.append(info2,del2);sc2.appendChild(top2);wrap.appendChild(sc2);
+    });
+    wrap.appendChild(el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:12,fontSize:11},onClick:()=>{UI.calSelectedEventos=null;render();}},'Cerrar'));
+  }
+
+  // Solicitar cambio — única vía para crear, mover o cancelar un periodo
+  const btnSolicitar=el('button',{
+    className:'btn-primary',style:{width:'100%',marginBottom:8,padding:13,background:'var(--jorge)',display:'flex',alignItems:'center',justifyContent:'center',gap:8},
+    onClick:()=>{UI.showSolicitudForm=!UI.showSolicitudForm;UI.solicitudTipo=null;UI.showWeekGen=false;UI.showEventoForm=false;render();}
+  });
+  if(!UI.showSolicitudForm){
+    const icoS=el('span',{style:{display:'inline-flex',width:16,height:16}});
+    icoS.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 2h6l1 3h4v16H4V5h4l1-3z"/><path d="M9 12l2 2 4-4"/></svg>';
+    btnSolicitar.append(icoS, document.createTextNode('Solicitar cambio, ausencia o vacaciones'));
+  } else {
+    btnSolicitar.textContent='Cancelar';
+  }
+  wrap.appendChild(btnSolicitar);
+  if(UI.showSolicitudForm) wrap.appendChild(renderSolicitudForm());
+
+  // Listado de solicitudes pendientes/recientes
+  if(S.solicitudes.length>0) wrap.appendChild(renderSolicitudesList());
+
+  // Generador de turnos base (solo para precargar el calendario, no para cambios puntuales)
+  const btnTurnos=el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:8,fontSize:12,textAlign:'left',display:'flex',flexDirection:'column',alignItems:'flex-start',gap:2,padding:'10px 14px'},onClick:()=>{UI.showWeekGen=!UI.showWeekGen;UI.showSolicitudForm=false;UI.showEventoForm=false;render();}});
+  if(!UI.showWeekGen){
+    const rowT=el('div',{style:{display:'flex',alignItems:'center',gap:8}});
+    const icoT=el('span',{style:{display:'inline-flex',width:15,height:15}});
+    icoT.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.36.61 1 .99 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+    rowT.append(icoT, document.createTextNode('Generar turnos semanales base'));
+    btnTurnos.append(rowT, el('div',{style:{fontSize:11,color:'var(--ink-soft)',paddingLeft:23}},'Solo configuración inicial'));
+  } else {
+    btnTurnos.textContent='Cancelar';
+  }
+  wrap.appendChild(btnTurnos);
+  if(UI.showWeekGen) wrap.appendChild(renderWeekGenForm());
+
+  // Añadir evento a la agenda — informativo, sin aprobación
+  const btnAgenda=el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:22,fontSize:12,background:'var(--ambos-soft)',color:'var(--ambos)',borderColor:'var(--ambos)',display:'flex',alignItems:'center',justifyContent:'center',gap:8},onClick:()=>{UI.showEventoForm=!UI.showEventoForm;UI.showSolicitudForm=false;UI.showWeekGen=false;render();}});
+  if(!UI.showEventoForm){
+    const icoA=el('span',{style:{display:'inline-flex',width:15,height:15}});
+    icoA.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z"/></svg>';
+    btnAgenda.append(icoA, document.createTextNode('Añadir a la agenda (cumpleaños, dormir fuera, actividad...)'));
+  } else {
+    btnAgenda.textContent='Cancelar';
+  }
+  wrap.appendChild(btnAgenda);
+  if(UI.showEventoForm) wrap.appendChild(renderEventoAgendaForm());
+
+  // Próximos eventos de agenda
+  const proximosEventos=[...S.eventosAgenda].filter(e=>(e.fecha||'').slice(0,10)>=today()).sort((a,b)=>(a.fecha||'').slice(0,10).localeCompare((b.fecha||'').slice(0,10))).slice(0,6);
+  if(proximosEventos.length){
+    wrap.appendChild(titleIcon('party','Próximos eventos',{fontSize:11,fontWeight:700,color:'var(--ink-soft)',marginBottom:8,textTransform:'uppercase',letterSpacing:.5}));
+    proximosEventos.forEach(ev=>{
+      const tipoInfo=EVENTO_TIPOS.find(t=>t.id===ev.tipo)||EVENTO_TIPOS[EVENTO_TIPOS.length-1];
+      const r=el('div',{className:'card',style:{marginBottom:8,padding:'12px 14px',display:'flex',alignItems:'center',gap:12,borderLeft:'3px solid '+tipoInfo.color}});
+      const iconBox=el('div',{style:{width:34,height:34,borderRadius:10,background:tipoInfo.color+'22',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,color:tipoInfo.color}});
+      const iconInner=el('span',{style:{width:17,height:17,display:'inline-flex'}});
+      iconInner.innerHTML=ICONS[tipoInfo.iconKey]||'';
+      iconBox.appendChild(iconInner);
+      const textCol=el('div',{style:{flex:1}});
+      textCol.append(
+        el('div',{style:{fontWeight:600,fontSize:14}},ev.titulo),
+        el('div',{style:{fontSize:11.5,color:'var(--ink-soft)'}},fmt(ev.fecha)+(ev.hora?' · '+ev.hora:''))
+      );
+      r.append(iconBox,textCol);
+      if(ev.detalle) textCol.appendChild(el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginTop:2}},ev.detalle));
+      const delBtn=el('button',{style:{fontSize:10,background:'none',border:'none',color:'var(--ink-soft)',cursor:'pointer',padding:0,textDecoration:'underline',flexShrink:0},onClick:()=>dbDelEventoAgenda(ev.id)},'Borrar');
+      r.appendChild(delBtn);
+      wrap.appendChild(r);
+    });
+  }
+
+  // Upcoming events
+  const upcoming=[...S.events].filter(ev=>ev.to>=today()&&ev.changeStatus!=='rechazado').sort((a,b)=>a.from.localeCompare(b.from)).slice(0,8);
+  if(upcoming.length){
+    wrap.appendChild(el('div',{style:{fontSize:11,fontWeight:700,color:'var(--ink-soft)',marginBottom:8,textTransform:'uppercase',letterSpacing:.5}},'Próximos periodos'));
+    upcoming.forEach(ev=>{
+      const r=el('div',{className:'card',style:{marginBottom:8,cursor:'pointer',borderLeft:'3px solid '+(ev.changeStatus==='pendiente'?'var(--ink-soft)':CUSTODY_TEXT[ev.who]),padding:'12px 14px'},onClick:()=>{UI.calSelected=ev;render();}});
+      const t=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center'}});
+      t.append(
+        el('div',{style:{display:'flex',gap:8,alignItems:'center'}},[badge(nameOf(ev.who),'badge-'+ev.who),ev.changeStatus==='pendiente'?badge('Pendiente','badge-warn'):badge('Confirmado','badge-ok')]),
+        el('div',{style:{fontSize:12,color:'var(--ink-soft)'}},fmt(ev.from)+' → '+fmt(ev.to)+' · '+(daysBetween(ev.from,ev.to))+'d')
+      );
+      r.appendChild(t);
+      if(ev.note) r.appendChild(el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginTop:3}},ev.note));
+      wrap.appendChild(r);
+    });
+  }
+
+  return wrap;
+}
+
+function renderCalMonth(){
+  const wrap=el('div',{});
+  const nav=el('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}});
+  nav.append(
+    el('button',{className:'btn-sm',onClick:()=>{if(UI.calMonth===0){UI.calMonth=11;UI.calYear--;}else UI.calMonth--;render();}},'←'),
+    el('span',{style:{fontWeight:700,fontSize:15}},MONTHS_L[UI.calMonth]+' '+(UI.calYear)+''),
+    el('button',{className:'btn-sm',onClick:()=>{if(UI.calMonth===11){UI.calMonth=0;UI.calYear++;}else UI.calMonth++;render();}},'→')
+  );
+
+  // Legend — cada muestra reproduce exactamente cómo se ve en el calendario
+  const leg=el('div',{style:{display:'flex',gap:'8px 16px',marginBottom:14,flexWrap:'wrap',alignItems:'center'}});
+  [
+    {label:'Jorge', color:'var(--jorge)'},
+    {label:'Eva', color:'var(--eva)'},
+    {label:'Ambos', color:'var(--ambos)'},
+  ].forEach(item=>{
+    const d=el('div',{style:{display:'flex',alignItems:'center',gap:7,flexShrink:0}});
+    d.append(
+      el('div',{style:{width:16,height:16,borderRadius:5,background:item.color,flexShrink:0}}),
+      el('span',{style:{fontSize:12,color:'var(--ink-soft)',whiteSpace:'nowrap'}},item.label)
+    );
+    leg.appendChild(d);
+  });
+  // Miércoles: reproduce el borde punteado real
+  const wedSample=el('div',{style:{display:'flex',alignItems:'center',gap:6,flexShrink:0}});
+  wedSample.append(
+    el('div',{style:{width:20,height:20,borderRadius:6,background:'var(--alert-soft)',border:'1.5px dashed var(--alert)',flexShrink:0}}),
+    el('span',{style:{fontSize:12,color:'var(--ink-soft)',whiteSpace:'nowrap'}},'Miércoles')
+  );
+  leg.appendChild(wedSample);
+  // Festivo: reproduce el icono de bandera real
+  const festSample=el('div',{style:{display:'flex',alignItems:'center',gap:6,flexShrink:0}});
+  const festIcoSample=el('span',{style:{width:20,height:20,borderRadius:6,background:'var(--accent)',color:'var(--paper)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}});
+  const festIcoInner=el('span',{style:{width:11,height:11,display:'inline-flex'}});
+  festIcoInner.innerHTML=ICONS.flag||'';
+  festIcoSample.appendChild(festIcoInner);
+  festSample.append(festIcoSample, el('span',{style:{fontSize:12,color:'var(--ink-soft)',whiteSpace:'nowrap'}},'Festivo'));
+  leg.appendChild(festSample);
+
+  // Build day map — miércoles fijo gets special treatment
+  const dayMap={};
+  const wedMap={};
+  S.events.forEach(ev=>{
+    if(ev.changeStatus==='rechazado') return;
+    if(ev.note==='Miércoles fijo'&&ev.from===ev.to){
+      wedMap[ev.from]=ev; return;
+    }
+    let d=new Date(ev.from+'T12:00:00'),end=new Date(ev.to+'T12:00:00');
+    while(d<=end){
+      const k=d.toISOString().slice(0,10);
+      if(!wedMap[k]) dayMap[k]=ev;
+      d.setDate(d.getDate()+1);
+    }
+  });
+
+  // Eventos de agenda por día (informativos, no forman parte de la custodia)
+  // Normalizamos la fecha a YYYY-MM-DD por si llega con hora incluida desde Supabase
+  const eventoMap={};
+  S.eventosAgenda.forEach(e=>{
+    const fk=(e.fecha||'').slice(0,10);
+    if(!fk) return;
+    if(!eventoMap[fk]) eventoMap[fk]=[];
+    eventoMap[fk].push(e);
+  });
+
+  const cal=el('div',{className:'card-dark',style:{padding:10,marginBottom:14}});
+  const calHdr=el('div',{className:'cal-grid',style:{marginBottom:4}});
+  ['L','M','X','J','V','S','D'].forEach(d=>calHdr.appendChild(el('div',{className:'cal-day-hdr'},d)));
+  cal.appendChild(calHdr);
+
+  const firstDay=new Date(UI.calYear,UI.calMonth,1).getDay();
+  const dim=new Date(UI.calYear,UI.calMonth+1,0).getDate();
+  const offset=(firstDay+6)%7;
+  const grid=el('div',{className:'cal-grid'});
+
+  for(let i=0;i<offset;i++) grid.appendChild(el('div',{}));
+  for(let n=1;n<=dim;n++){
+    const key=String(UI.calYear)+'-'+String(UI.calMonth+1).padStart(2,'0')+'-'+String(n).padStart(2,'0');
+    const ev=dayMap[key];
+    const wedEv=wedMap[key];
+    const isTdy=key===today();
+    const isPend=ev&&ev.changeStatus==='pendiente';
+
+    let bgColor='transparent', textColor='var(--ink-soft)', borderStyle='none', clickEv=null;
+    if(wedEv){
+      bgColor='var(--alert-soft)'; textColor='var(--alert)'; borderStyle='1px dashed var(--alert)'; clickEv=wedEv;
+    } else if(ev&&!isPend){
+      bgColor=CUSTODY_BG[ev.who]; textColor=CUSTODY_TEXT[ev.who]; clickEv=ev;
+    } else if(isPend){
+      borderStyle='1px dashed var(--ink-soft)'; clickEv=ev;
+    }
+
+    const isFest = isFestivo(key);
+    const isLectivo = isDiaLectivoEspecial(key);
+    const eventosDia = eventoMap[key]||[];
+    const titleParts=[];
+    if(isFest) titleParts.push(festivoName(key));
+    if(isLectivo) titleParts.push(diaLectivoNombre(key));
+    if(eventosDia.length) titleParts.push(eventosDia.map(e=>e.titulo).join(', '));
+    const cell=el('div',{
+      className:'cal-cell'+(ev||wedEv?' has-event':''),
+      style:{background:bgColor,position:'relative'},
+      title:titleParts.join(' · '),
+      onClick:()=>{if(clickEv){UI.calSelected=clickEv;render();} else if(isFest){ alert('🎉 '+festivoName(key)); } else if(eventosDia.length){ UI.calSelectedEventos=eventosDia; render(); } else if(isLectivo){ alert('🏫 '+diaLectivoNombre(key)); }}
+    });
+    cell.appendChild(el('div',{
+      className:'cal-num'+(isTdy?' today':''),
+      style:{color:isTdy?'':isFest&&!ev&&!wedEv?'var(--accent)':textColor, border:isTdy?'none':borderStyle}
+    },String(n)));
+    if(isFest){
+      const festIco=el('span',{style:{position:'absolute',bottom:1,left:2,width:11,height:11,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'var(--paper)',background:'var(--accent)',borderRadius:'50%',padding:1.5,boxSizing:'border-box'}});
+      festIco.innerHTML=ICONS.flag||'';
+      cell.appendChild(festIco);
+    }
+    if(isLectivo){
+      const lecIco=el('span',{style:{position:'absolute',bottom:1,right:2,width:11,height:11,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'var(--paper)',background:'var(--jorge)',borderRadius:'50%',padding:1.5,boxSizing:'border-box'}});
+      lecIco.innerHTML=ICONS.school||'';
+      cell.appendChild(lecIco);
+    }
+    if(eventosDia.length){
+      const tipoInfo = EVENTO_TIPOS.find(t=>t.id===eventosDia[0].tipo)||EVENTO_TIPOS[EVENTO_TIPOS.length-1];
+      const miniIco=el('span',{style:{position:'absolute',top:2,right:2,width:14,height:14,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'var(--paper)',background:tipoInfo.color,borderRadius:'50%',padding:2,boxSizing:'border-box'}});
+      miniIco.innerHTML=ICONS[tipoInfo.iconKey]||'';
+      cell.appendChild(miniIco);
+    }
+    grid.appendChild(cell);
+  }
+  cal.appendChild(grid);
+  wrap.append(nav,leg,cal);
+  return wrap;
+}
+
+function renderCalWeek(){
+  const wrap=el('div',{});
+  // Get Monday of current week
+  const ref=new Date(); ref.setHours(12,0,0,0);
+  const dow=ref.getDay(); const diff=dow===0?-6:1-dow;
+  ref.setDate(ref.getDate()+diff+UI.weekOffset*7);
+
+  const nav=el('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}});
+  nav.append(
+    el('button',{className:'btn-sm',onClick:()=>{UI.weekOffset=(UI.weekOffset||0)-1;render();}},'←'),
+    el('span',{style:{fontWeight:700,fontSize:14}},'Semana del '+ref.toLocaleDateString('es-ES',{day:'numeric',month:'short'})),
+    el('button',{className:'btn-sm',onClick:()=>{UI.weekOffset=(UI.weekOffset||0)+1;render();}},'→')
+  );
+
+  const dayMap={};
+  S.events.forEach(ev=>{
+    if(ev.changeStatus==='rechazado') return;
+    let d=new Date(ev.from+'T12:00:00'),end=new Date(ev.to+'T12:00:00');
+    while(d<=end){dayMap[d.toISOString().slice(0,10)]=ev;d.setDate(d.getDate()+1);}
+  });
+  const eventoMap={};
+  S.eventosAgenda.forEach(e=>{
+    const fk=(e.fecha||'').slice(0,10);
+    if(!fk) return;
+    if(!eventoMap[fk]) eventoMap[fk]=[];
+    eventoMap[fk].push(e);
+  });
+
+  const DNAMES=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  const hdrRow=el('div',{className:'week-row'});
+  const bodyRow=el('div',{className:'week-row'});
+
+  for(let i=0;i<7;i++){
+    const d=new Date(ref); d.setDate(d.getDate()+i);
+    const key=d.toISOString().slice(0,10);
+    const ev=dayMap[key];
+    const isTdy=key===today();
+    hdrRow.appendChild(el('div',{style:{textAlign:'center',fontSize:10,fontWeight:700,color:isTdy?'var(--jorge)':'var(--ink-soft)',paddingBottom:4}},DNAMES[i]));
+    const isFestD=isFestivo(key);
+    const festNm=festivoName(key);
+    const eventosDia=eventoMap[key]||[];
+    const cell=el('div',{
+      className:'week-cell',
+      style:{background:ev?CUSTODY_BG[ev.who]:'var(--paper)',border:isTdy?'1px solid var(--jorge)':isFestD?'1px solid var(--accent)22':'1px solid var(--line)',cursor:(ev||isFestD||eventosDia.length)?'pointer':'default',position:'relative'},
+      title:isFestD?festNm:(eventosDia.length?eventosDia.map(e=>e.titulo).join(', '):''),
+      onClick:()=>{if(ev){UI.calSelected=ev;render();}else if(isFestD){alert('🎉 '+festNm);}else if(eventosDia.length){UI.calSelectedEventos=eventosDia;render();}}
+    });
+    cell.append(
+      el('div',{style:{fontSize:15,fontWeight:isTdy?800:600,color:ev?CUSTODY_TEXT[ev.who]:isFestD?'var(--accent)':'var(--ink-soft)'}},String(d.getDate())),
+      ev?el('div',{style:{fontSize:10,color:CUSTODY_TEXT[ev.who],fontWeight:700}},nameOf(ev.who)):el('div',{style:{fontSize:10,color:'var(--ink-soft)'}},'—')
+    );
+    if(isFestD){
+      const festIcoW=el('span',{style:{position:'absolute',bottom:2,left:2,width:12,height:12,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'var(--paper)',background:'var(--accent)',borderRadius:'50%',padding:1.5,boxSizing:'border-box'}});
+      festIcoW.innerHTML=ICONS.flag||'';
+      cell.appendChild(festIcoW);
+    }
+    if(eventosDia.length){
+      const tipoInfo=EVENTO_TIPOS.find(t=>t.id===eventosDia[0].tipo)||EVENTO_TIPOS[EVENTO_TIPOS.length-1];
+      const miniIcoW=el('span',{style:{position:'absolute',top:3,right:3,width:15,height:15,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'var(--paper)',background:tipoInfo.color,borderRadius:'50%',padding:2,boxSizing:'border-box'}});
+      miniIcoW.innerHTML=ICONS[tipoInfo.iconKey]||'';
+      cell.appendChild(miniIcoW);
+    }
+    bodyRow.appendChild(cell);
+  }
+  wrap.append(nav,hdrRow,bodyRow);
+  return wrap;
+}
+
+// ── SOLICITUDES (según convenio) ──────────────────────────────────────────────
+// ── EVENTOS DE AGENDA (informativo, sin aprobación) ───────────────────────────
+function renderEventoAgendaForm(){
+  const wrap=el('div',{className:'card fade-in',style:{marginBottom:12,borderColor:'var(--ambos)'}});
+  wrap.appendChild(el('div',{style:{fontWeight:700,fontSize:14,marginBottom:4,color:'var(--ambos)'}},'🎉 Añadir evento a la agenda'));
+  wrap.appendChild(el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginBottom:14}},'Informativo: se añade directamente y ambos lo veréis. No requiere aprobación.'));
+
+  const f=UI.eventoForm;
+
+  const tipoWrap=el('div',{style:{marginBottom:12}});
+  tipoWrap.appendChild(lbl('Tipo'));
+  const tipoGrid=el('div',{style:{display:'flex',flexWrap:'wrap',gap:6}});
+  EVENTO_TIPOS.forEach(t=>{
+    const btnT=el('button',{
+      style:{display:'flex',alignItems:'center',gap:6,padding:'8px 12px',borderRadius:9,border:'1px solid',borderColor:f.tipo===t.id?t.color:'var(--line)',background:f.tipo===t.id?t.color+'22':'transparent',color:f.tipo===t.id?t.color:'var(--ink-soft)',fontWeight:f.tipo===t.id?700:400,fontSize:12},
+      onClick:()=>{UI.eventoForm.tipo=t.id;render();}
+    });
+    const icoT=el('span',{style:{width:14,height:14,display:'inline-flex'}});
+    icoT.innerHTML=ICONS[t.iconKey]||'';
+    btnT.append(icoT, document.createTextNode(t.label));
+    tipoGrid.appendChild(btnT);
+  });
+  tipoWrap.appendChild(tipoGrid);
+  wrap.appendChild(tipoWrap);
+
+  wrap.appendChild(el('div',{style:{marginBottom:10}},[lbl('Título'),inp('text',f.titulo,v=>UI.eventoForm.titulo=v,'Ej: Cumpleaños de Lucía, Clase de baile, Duerme en casa de la abuela')]));
+
+  wrap.appendChild(row(
+    col([lbl('Fecha'),inp('date',f.fecha,v=>UI.eventoForm.fecha=v)]),
+    col([lbl('Hora (opcional)'),inp('time',f.hora,v=>UI.eventoForm.hora=v)])
+  ));
+
+  const ta=el('textarea',{className:'input',style:{minHeight:56,resize:'vertical'}});
+  ta.value=f.detalle;
+  ta.placeholder='Detalles, dirección, quién la recoge...';
+  ta.addEventListener('input',e=>UI.eventoForm.detalle=e.target.value);
+  wrap.appendChild(el('div',{style:{marginBottom:14}},[lbl('Detalle (opcional)'),ta]));
+
+  const errEv=el('div',{id:'eventoErr',style:{color:'var(--alert)',fontSize:12,marginBottom:8,minHeight:16,textAlign:'center'}},'');
+  wrap.appendChild(errEv);
+
+  wrap.appendChild(el('button',{className:'btn-primary',style:{width:'100%',background:'var(--ambos)'},id:'eventoSaveBtn',onClick:async()=>{
+    const btn=document.getElementById('eventoSaveBtn');
+    const err=document.getElementById('eventoErr');
+    if(!f.titulo.trim()){ err.textContent='Escribe un título para el evento.'; return; }
+    if(!f.fecha){ err.textContent='Selecciona una fecha.'; return; }
+    err.textContent='';
+    btn.disabled=true; btn.style.opacity='0.6'; btn.textContent='Guardando…';
+    try{
+      await dbAddEventoAgenda(f);
+      UI.showEventoForm=false;
+      UI.eventoForm={tipo:'cumpleanos',titulo:'',fecha:today(),hora:'',detalle:''};
+      render();
+    }catch(e){
+      console.error('Error guardando evento de agenda:', e);
+      err.textContent='No se pudo guardar: '+(e.message||'inténtalo de nuevo')+'.';
+      btn.disabled=false; btn.style.opacity='1'; btn.textContent='Añadir a la agenda';
+    }
+  }},'Añadir a la agenda'));
+
+  return wrap;
+}
+
+
+function renderSolicitudForm(){
+  const wrap=el('div',{className:'card fade-in',style:{marginBottom:12,borderColor:'var(--eva)'}});
+
+  if(!UI.solicitudTipo){
+    wrap.appendChild(el('div',{style:{fontWeight:700,fontSize:14,marginBottom:4,color:'var(--eva)'}},'¿Qué quieres solicitar?'));
+    wrap.appendChild(el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginBottom:12}},'Según lo pactado en el convenio regulador. Cualquier cambio en el calendario pasa por aquí y requiere aprobación del otro progenitor.'));
+    SOLICITUD_TIPOS.forEach(t=>{
+      const b=el('button',{
+        style:{display:'flex',alignItems:'center',gap:10,width:'100%',textAlign:'left',padding:'11px 12px',marginBottom:6,background:'var(--paper)',border:'1px solid var(--line)',borderRadius:9,cursor:'pointer'},
+        onClick:()=>{
+          UI.solicitudTipo=t.id;
+          UI.solicitudForm={from:today(),to:today(),motivo:'',eventIdAfectado:null,accion:'editar',quienNuevo:'J',aiText:'',aiLoading:false};
+          render();
+        }
+      });
+      const icoBadge=el('div',{style:{width:32,height:32,borderRadius:9,background:'var(--eva-soft)',color:'var(--eva)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}});
+      const icoInner2=el('span',{style:{width:16,height:16,display:'inline-flex'}});
+      icoInner2.innerHTML=ICONS[t.iconKey]||'';
+      icoBadge.appendChild(icoInner2);
+      b.append(
+        icoBadge,
+        el('div',{},[el('div',{style:{fontSize:13,fontWeight:600,color:'var(--ink)'}},t.label)])
+      );
+      wrap.appendChild(b);
+    });
+    return wrap;
+  }
+
+  const tipo=SOLICITUD_TIPOS.find(t=>t.id===UI.solicitudTipo);
+  const f=UI.solicitudForm;
+
+  wrap.appendChild(el('button',{style:{background:'none',border:'none',color:'var(--eva)',fontSize:12,marginBottom:10,cursor:'pointer',padding:0},onClick:()=>{UI.solicitudTipo=null;render();}},'← Cambiar tipo de solicitud'));
+  wrap.appendChild(titleIcon(tipo.iconKey, tipo.label, {fontWeight:700,fontSize:14,marginBottom:6,color:'var(--eva)'}));
+  wrap.appendChild(el('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:14,lineHeight:1.5,padding:'8px 10px',background:'var(--bg)',borderRadius:8}},tipo.ayuda));
+
+  // Selector de periodo existente + acción, solo para modificar_periodo
+  if(tipo.esModificacion){
+    const futuros=[...S.events].filter(ev=>ev.to>=today()&&ev.changeStatus!=='rechazado').sort((a,b)=>a.from.localeCompare(b.from));
+    wrap.appendChild(el('div',{style:{marginBottom:10}},[lbl('¿Qué periodo quieres cambiar?')]));
+    if(!futuros.length){
+      wrap.appendChild(el('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:10}},'No hay periodos futuros en el calendario.'));
+    } else {
+      const selPeriodo=el('select',{className:'input',style:{marginBottom:10}});
+      selPeriodo.appendChild(el('option',{value:''},'— Selecciona un periodo —'));
+      futuros.forEach(ev=>{
+        const o=el('option',{value:ev.id},nameOf(ev.who)+': '+fmt(ev.from)+' → '+fmt(ev.to)+(ev.note?' ('+ev.note+')':''));
+        if(String(f.eventIdAfectado)===String(ev.id)) o.selected=true;
+        selPeriodo.appendChild(o);
+      });
+      selPeriodo.addEventListener('change',e=>{
+        UI.solicitudForm.eventIdAfectado=e.target.value||null;
+        const ev=futuros.find(x=>String(x.id)===e.target.value);
+        if(ev){ UI.solicitudForm.from=ev.from; UI.solicitudForm.to=ev.to; UI.solicitudForm.quienNuevo=ev.who; }
+        render();
+      });
+      wrap.appendChild(selPeriodo);
+    }
+    // Acción: editar o cancelar
+    const accWrap=el('div',{style:{display:'flex',gap:8,marginBottom:14}});
+    [['editar','✏️ Cambiar fechas/quién'],['cancelar','🗑️ Cancelar este periodo']].forEach(([k,l])=>{
+      accWrap.appendChild(el('button',{
+        style:{flex:1,padding:9,borderRadius:9,border:'1px solid',borderColor:f.accion===k?'var(--eva)':'var(--line)',background:f.accion===k?'var(--eva-soft)':'transparent',color:f.accion===k?'var(--eva)':'var(--ink-soft)',fontWeight:f.accion===k?700:400,fontSize:12},
+        onClick:()=>{UI.solicitudForm.accion=k;render();}
+      },l));
+    });
+    wrap.appendChild(accWrap);
+  }
+
+  // Ayudante de IA para rellenar fechas a partir de texto (disponible cuando hay fechas que rellenar)
+  if(!(tipo.esModificacion && f.accion==='cancelar')){
+    wrap.appendChild(el('div',{style:{marginBottom:12,padding:'10px 12px',background:'var(--bg)',border:'1px dashed var(--eva-soft)',borderRadius:9}},[
+      el('div',{style:{fontSize:11,color:'var(--eva)',marginBottom:6,fontWeight:600}},'🤖 ¿Prefieres describirlo en texto?'),
+      (()=>{
+        const aiRow=el('div',{style:{display:'flex',gap:6}});
+        const aiInp=el('input',{className:'input',style:{flex:1,fontSize:12,padding:'7px 10px'},placeholder:'Ej: del 15 al 22 de julio con Eva por vacaciones'});
+        aiInp.value=f.aiText||'';
+        aiInp.addEventListener('input',e=>UI.solicitudForm.aiText=e.target.value);
+        const aiBtn=el('button',{className:'btn-ghost',style:{fontSize:11,flexShrink:0,padding:'7px 12px'},onClick:async()=>{
+          if(!f.aiText||!f.aiText.trim()) return;
+          UI.solicitudForm.aiLoading=true;render();
+          try{
+            const prompt='Hoy es '+today()+'. Analiza este texto sobre un plan de custodia y devuelve SOLO un objeto JSON con estos campos exactos: who (J=Jorge, E=Eva, ambos), from (YYYY-MM-DD), to (YYYY-MM-DD), note (string breve con el motivo). Texto: "'+f.aiText+'". Responde SOLO con el JSON, sin explicación ni markdown.';
+            const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:200,messages:[{role:'user',content:prompt}]})});
+            const data=await resp.json();
+            const text=data.content?.[0]?.text||'';
+            const clean=text.replace(/```json|```/g,'').trim();
+            const parsed=JSON.parse(clean);
+            UI.solicitudForm.from=parsed.from||f.from;
+            UI.solicitudForm.to=parsed.to||parsed.from||f.to;
+            UI.solicitudForm.quienNuevo=parsed.who||f.quienNuevo;
+            if(!f.motivo) UI.solicitudForm.motivo=parsed.note||'';
+          }catch(e){ /* silencioso: el usuario puede rellenar a mano */ }
+          UI.solicitudForm.aiLoading=false;render();
+        }},f.aiLoading?'…':'Rellenar');
+        aiRow.append(aiInp,aiBtn);
+        return aiRow;
+      })()
+    ]));
+  }
+
+  if(tipo.esModificacion && f.accion==='cancelar'){
+    // Solo motivo, sin fechas (se cancela el periodo seleccionado tal cual)
+  } else if(tipo.necesitaHasta){
+    wrap.appendChild(row(
+      col([lbl('Desde'),inp('date',f.from,v=>UI.solicitudForm.from=v)]),
+      col([lbl('Hasta'),inp('date',f.to,v=>UI.solicitudForm.to=v)])
+    ));
+  } else {
+    wrap.appendChild(el('div',{style:{marginBottom:10}},[lbl('Fecha'),inp('date',f.from,v=>{UI.solicitudForm.from=v;UI.solicitudForm.to=v;})]));
+  }
+
+  if(tipo.esModificacion && f.accion==='editar'){
+    wrap.appendChild(el('div',{style:{marginBottom:10}},[
+      lbl('Con quién'),
+      el('div',{style:{display:'flex',gap:8}},[['J','Jorge'],['E','Eva'],['ambos','Ambos']].map(([k,l])=>el('button',{
+        style:{flex:1,padding:9,borderRadius:9,border:'1px solid',borderColor:f.quienNuevo===k?CUSTODY_TEXT[k]:'var(--line)',background:f.quienNuevo===k?CUSTODY_BG[k]:'transparent',color:f.quienNuevo===k?CUSTODY_TEXT[k]:'var(--ink-soft)',fontWeight:f.quienNuevo===k?700:400,fontSize:12},
+        onClick:()=>{UI.solicitudForm.quienNuevo=k;render();}},l)))
+    ]));
+  }
+
+  const ta=el('textarea',{className:'input',style:{minHeight:64,resize:'vertical'}});
+  ta.value=f.motivo;
+  ta.placeholder=tipo.motivoPlaceholder;
+  ta.addEventListener('input',e=>UI.solicitudForm.motivo=e.target.value);
+  wrap.appendChild(el('div',{style:{marginBottom:14}},[lbl(tipo.necesitaMotivo?'Motivo (obligatorio)':'Detalle (opcional)'),ta]));
+
+  wrap.appendChild(el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginBottom:10,display:'flex',alignItems:'center',gap:6}},[
+    el('span',{},'📧'),
+    el('span',{},'Al enviar, llegará un email a ambos correos avisando de la solicitud. Solo se aplicará al calendario si el otro progenitor la aprueba.')
+  ]));
+
+  wrap.appendChild(el('button',{className:'btn-primary',style:{width:'100%',background:'var(--eva)'},onClick:async()=>{
+    if(tipo.necesitaMotivo && !f.motivo.trim()){ alert('Este tipo de solicitud requiere indicar un motivo.'); return; }
+    if(tipo.esModificacion && !f.eventIdAfectado){ alert('Selecciona qué periodo quieres modificar o cancelar.'); return; }
+    await dbAddSolicitud({
+      tipo:tipo.id, from:f.from, to:f.to, motivo:f.motivo,
+      eventIdAfectado: tipo.esModificacion ? f.eventIdAfectado : null,
+      accion: tipo.esModificacion ? f.accion : null,
+      quienNuevo: tipo.esModificacion ? f.quienNuevo : null,
+    });
+    UI.showSolicitudForm=false;UI.solicitudTipo=null;UI.solicitudForm={from:today(),to:today(),motivo:''};
+  }},'Enviar solicitud'));
+
+  return wrap;
+}
+
+function renderSolicitudesList(){
+  const wrap=el('div',{style:{marginBottom:14}});
+  const pendientes=S.solicitudes.filter(s=>s.estado==='pendiente');
+  const resueltas=S.solicitudes.filter(s=>s.estado!=='pendiente').slice(0,5);
+
+  if(pendientes.length){
+    wrap.appendChild(titleIcon('clipboard','Solicitudes pendientes ('+pendientes.length+')',{fontSize:11,fontWeight:700,color:'var(--eva)',marginTop:18,marginBottom:8,textTransform:'uppercase',letterSpacing:.5}));
+    pendientes.forEach(s=>{
+      const tipoInfo=SOLICITUD_TIPOS.find(t=>t.id===s.tipo);
+      const mia = s.from_user===S.user.role;
+      const card=el('div',{className:'card',style:{marginBottom:8,borderLeft:'3px solid var(--eva)',padding:'12px 14px'}});
+      card.appendChild(el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'start',marginBottom:6}},[
+        el('div',{},[
+          tipoInfo?titleIcon(tipoInfo.iconKey,(s.tipo_label||s.tipo),{fontSize:13,fontWeight:700}):el('div',{style:{fontSize:13,fontWeight:700}},s.tipo_label||s.tipo),
+          el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginTop:2}},fmt(s.from_date)+(s.to_date&&s.to_date!==s.from_date?' → '+fmt(s.to_date):'')+' · Pide '+nameOf(s.from_user))
+        ]),
+        badge('Pendiente','badge-warn')
+      ]));
+      if(s.tipo==='modificar_periodo'){
+        if(!s.event_id_afectado){
+          card.appendChild(el('div',{style:{fontSize:11,color:'var(--alert)',marginBottom:6,padding:'5px 9px',background:'var(--alert-soft)',borderRadius:6}},'⚠️ El periodo original ya no existe (fue borrado por otra vía). Aprobar esta solicitud no hará ningún cambio en el calendario.'));
+        } else {
+          const detalle = s.accion==='cancelar'
+            ? '🗑️ Se cancelará este periodo si apruebas'
+            : '✏️ Pasaría a: '+nameOf(s.quien_nuevo)+' · '+fmt(s.from_date)+(s.to_date&&s.to_date!==s.from_date?' → '+fmt(s.to_date):'');
+          card.appendChild(el('div',{style:{fontSize:11,color:'var(--eva)',marginBottom:6,padding:'5px 9px',background:'var(--eva-soft)',borderRadius:6}},detalle));
+        }
+      }
+      if(s.motivo) card.appendChild(el('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:8,fontStyle:'italic'}},s.motivo));
+      const btns=el('div',{style:{display:'flex',gap:6}});
+      if(!mia){
+        btns.append(
+          el('button',{className:'btn-success',onClick:()=>dbRespondSolicitud(s.id,'aprobada')},'✓ Aprobar'),
+          el('button',{className:'btn-danger',onClick:()=>dbRespondSolicitud(s.id,'rechazada')},'✗ Rechazar')
+        );
+      } else {
+        btns.append(el('div',{style:{fontSize:11,color:'var(--ink-soft)',fontStyle:'italic'}},'Esperando respuesta de '+nameOf(s.from_user==='J'?'E':'J')));
+      }
+      if(mia) btns.appendChild(el('button',{className:'btn-ghost',style:{fontSize:10,marginLeft:'auto'},onClick:()=>dbDelSolicitud(s.id)},'Retirar'));
+      card.appendChild(btns);
+      wrap.appendChild(card);
+    });
+  }
+
+  if(resueltas.length){
+    wrap.appendChild(el('div',{style:{fontSize:11,fontWeight:700,color:'var(--ink-soft)',marginBottom:8,marginTop:pendientes.length?14:0,textTransform:'uppercase',letterSpacing:.5}},'Resueltas recientemente'));
+    resueltas.forEach(s=>{
+      const tipoInfo=SOLICITUD_TIPOS.find(t=>t.id===s.tipo);
+      const esRechazo = s.estado!=='aprobada';
+      const card=el('div',{className:'card',style:{marginBottom:6,padding:'9px 14px',opacity:.75,borderLeft:esRechazo?'3px solid var(--alert)':'3px solid var(--ambos)'}});
+      card.appendChild(el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center'}},[
+        tipoInfo?titleIcon(tipoInfo.iconKey,(s.tipo_label||s.tipo)+' · '+fmt(s.from_date),{fontSize:12}):el('div',{style:{fontSize:12}},(s.tipo_label||s.tipo)+' · '+fmt(s.from_date)),
+        badge(s.estado==='aprobada'?'✓ Consentimiento mutuo':'✗ SIN acuerdo', s.estado==='aprobada'?'badge-ok':'badge-warn')
+      ]));
+      if(s.resuelto_por){
+        card.appendChild(el('div',{style:{fontSize:10,color:'var(--ink-soft)',marginTop:4}},
+          'Pedida por '+nameOf(s.from_user)+' · Resuelta por '+nameOf(s.resuelto_por)+(s.resuelto_en?' · '+new Date(s.resuelto_en).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'')
+        ));
+      }
+      wrap.appendChild(card);
+    });
+  }
+
+  return wrap;
+}
+
+
+function renderWeekGenForm(){
+  const f=UI.weekGen;
+  const form=el('div',{className:'card fade-in',style:{marginBottom:12,borderColor:'var(--jorge-soft)'}});
+  form.appendChild(el('div',{style:{fontWeight:700,fontSize:14,marginBottom:12,color:'var(--jorge)'}},'⚙️ Generador de turnos semanales'));
+  form.appendChild(el('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:14,lineHeight:1.6}},'Genera automáticamente los turnos para los próximos meses. Los turnos existentes no se borran.'));
+
+  form.append(
+    row(
+      col([lbl('Fecha inicio (lunes)'),inp('date',f.startDate,v=>UI.weekGen.startDate=v)]),
+      col([lbl('Semanas a generar'),inp('number',f.weeks,v=>UI.weekGen.weeks=parseInt(v)||12,'12')])
+    ),
+    el('div',{style:{marginBottom:10}},[
+      lbl('Primera semana para'),
+      el('div',{style:{display:'flex',gap:8}},[
+        ['J','Jorge'],['E','Eva']].map(([k,l])=>el('button',{
+          style:{flex:1,padding:9,borderRadius:9,border:'1px solid',borderColor:f.startWith===k?CUSTODY_TEXT[k]:'var(--line)',background:f.startWith===k?CUSTODY_BG[k]:'transparent',color:f.startWith===k?CUSTODY_TEXT[k]:'var(--ink-soft)',fontWeight:f.startWith===k?700:400,fontSize:12},
+          onClick:()=>{UI.weekGen.startWith=k;render();}},l))
+      )
+    ]),
+    el('div',{style:{marginBottom:14}},[
+      lbl('Miércoles'),
+      el('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},[
+        ['none','Incluido en turno semanal'],['fixed_other','Siempre con el otro progenitor']].map(([k,l])=>el('button',{
+          style:{padding:'8px 12px',borderRadius:9,border:'1px solid',borderColor:f.wednesdayMode===k?'var(--jorge)':'var(--line)',background:f.wednesdayMode===k?'var(--jorge-soft)':'transparent',color:f.wednesdayMode===k?'var(--jorge)':'var(--ink-soft)',fontSize:12,fontWeight:f.wednesdayMode===k?700:400},
+          onClick:()=>{UI.weekGen.wednesdayMode=k;render();}},l))
+      )
+    ])
+  );
+
+  // Preview
+  const preview=generateWeeklySchedule(f.startDate,Math.min(f.weeks,4),f.wednesdayMode);
+  if(preview.length){
+    form.appendChild(el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginBottom:8,textTransform:'uppercase',letterSpacing:.5}},'Vista previa (primeras 4 semanas)'));
+    const prev=el('div',{className:'card-dark',style:{padding:10,marginBottom:12}});
+    preview.slice(0,8).forEach(p=>{
+      const r=el('div',{style:{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:'1px solid var(--paper)'}});
+      r.append(el('span',{style:{fontSize:12,color:CUSTODY_TEXT[p.who],fontWeight:600}},nameOf(p.who)),el('span',{style:{fontSize:11,color:'var(--ink-soft)'}},fmt(p.from)+' → '+fmt(p.to)+' · '+p.note));
+      prev.appendChild(r);
+    });
+    form.appendChild(prev);
+  }
+
+  form.appendChild(el('button',{className:'btn-primary',style:{width:'100%'},onClick:async()=>{
+    // Validar que la fecha de inicio es lunes
+    const startDow=new Date(f.startDate+'T12:00:00').getDay();
+    if(startDow!==1){ alert('La fecha de inicio debe ser un lunes. Has elegido '+['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][startDow]+'.'); return; }
+    const events=generateWeeklySchedule(f.startDate,f.weeks,f.wednesdayMode);
+    // Adjust startWith
+    let whoWeek=f.startWith;
+    const finalEvents=events.map(e=>{
+      // already assigned in generator — but we need to override with startWith
+      return e;
+    });
+    // Regenerate with correct startWith
+    const corrected=[];
+    let cur=new Date(f.startDate+'T12:00:00');
+    let who=f.startWith;
+    const other=who==='J'?'E':'J';
+    for(let w=0;w<f.weeks;w++){
+      const mon=new Date(cur);const sun=new Date(cur);sun.setDate(sun.getDate()+6);
+      const wed=new Date(cur);wed.setDate(wed.getDate()+2);
+      const thu=new Date(cur);thu.setDate(thu.getDate()+3);
+      const monStr=mon.toISOString().slice(0,10);const sunStr=sun.toISOString().slice(0,10);
+      const wedStr=wed.toISOString().slice(0,10);const thuStr=thu.toISOString().slice(0,10);
+      const ot=who==='J'?'E':'J';
+      if(f.wednesdayMode==='fixed_other'){
+        corrected.push({from:monStr,to:addDays(monStr,1),who,note:'Turno semanal (L-M)',changeRequest:false});
+        corrected.push({from:wedStr,to:wedStr,who:ot,note:'Miércoles fijo',changeRequest:false});
+        corrected.push({from:thuStr,to:sunStr,who,note:'Turno semanal (J-D)',changeRequest:false});
+      } else {
+        corrected.push({from:monStr,to:sunStr,who,note:'Turno semanal',changeRequest:false});
+      }
+      cur.setDate(cur.getDate()+7);who=ot;
+    }
+    await dbAddEventsBulk(corrected);
+    UI.showWeekGen=false;
+  }},'Generar turnos'));
+  return form;
+}
+
+// ── GASTOS ────────────────────────────────────────────────────────────────────
+function renderGastos(diff){
+  const wrap=el('div',{});
+  const pend=S.expenses.filter(e=>e.status==='pendiente');
+
+  if(pend.length>0){
+    const bc=el('div',{className:'card',style:{background:'var(--paper)',border:'1px solid '+(Math.abs(diff)<0.01?'var(--ambos)':'var(--alert)'),marginBottom:14}});
+    bc.appendChild(titleIcon('wallet','Saldo pendiente',{fontSize:11,color:'var(--ink-soft)',marginBottom:6,textTransform:'uppercase',letterSpacing:.5}));
+    if(Math.abs(diff)<0.01){
+      const okRow=el('div',{style:{display:'flex',alignItems:'center',gap:6,color:'var(--ambos)',fontWeight:700,fontSize:16,margin:'4px 0'}});
+      const okIco=el('span',{style:{width:17,height:17,display:'inline-flex'}});
+      okIco.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 13l4 4L19 7"/></svg>';
+      okRow.append(okIco, document.createTextNode('Al día'));
+      bc.appendChild(okRow);
+    } else {
+      bc.appendChild(el('div',{style:{fontWeight:800,fontSize:20,marginBottom:3,color:'var(--alert)'}},diff>0?'Eva debe '+(fmtM(Math.abs(diff))):'Jorge debe '+(fmtM(Math.abs(diff)))));
+    }
+    bc.appendChild(el('div',{style:{fontSize:11,color:'var(--ink-soft)'}}, pend.length+' gastos · Total: '+(fmtM(pend.reduce((s,e)=>s+parseFloat(e.amount||0),0)))));
+    wrap.appendChild(bc);
+  }
+
+  // Filters
+  const fil=el('div',{style:{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap'}});
+  [['todos','Todos'],['pendiente','Pendientes'],['liquidado','Liquidados']].forEach(([k,l])=>{
+    fil.appendChild(el('button',{
+      style:{padding:'5px 12px',borderRadius:20,border:'1px solid',borderColor:UI.expFilter===k?'var(--jorge)':'var(--line)',background:UI.expFilter===k?'var(--jorge-soft)':'transparent',color:UI.expFilter===k?'var(--jorge)':'var(--ink-soft)',fontSize:11,fontWeight:UI.expFilter===k?700:400},
+      onClick:()=>{UI.expFilter=k;render();}
+    },l));
+  });
+  const catSel=el('select',{className:'input',style:{width:'auto',padding:'5px 8px',fontSize:11}});
+  catSel.appendChild(el('option',{value:'todas'},'Todas'));
+  EXPENSE_CATS.forEach(c=>{
+    const o=el('option',{value:c.id},c.id);
+    if(c.id===UI.expCatFilter) o.selected=true;
+    catSel.appendChild(o);
+  });
+  catSel.addEventListener('change',e=>{UI.expCatFilter=e.target.value;render();});
+  fil.appendChild(catSel);
+  wrap.appendChild(fil);
+
+  // List
+  let filtered=UI.expFilter==='todos'?S.expenses:S.expenses.filter(e=>e.status===UI.expFilter);
+  if(UI.expCatFilter!=='todas') filtered=filtered.filter(e=>e.cat===UI.expCatFilter);
+  filtered=[...filtered].sort((a,b)=>b.date.localeCompare(a.date));
+
+  if(!filtered.length) wrap.appendChild(el('div',{style:{textAlign:'center',color:'var(--ink-soft)',padding:'28px 0',fontSize:13}},'Sin gastos'));
+
+  filtered.forEach(e=>{
+    const age=Math.round((Date.now()-new Date(e.date+'T12:00:00'))/86400000);
+    const catColor=EXPENSE_CAT_COLORS[e.cat]||'var(--jorge)';
+    const r=el('div',{className:'card',style:{marginBottom:12,opacity:e.status==='liquidado'?0.6:1,padding:16}});
+    const topRow=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}});
+    const catChip=el('span',{className:'chip',style:{background:catColor+'22',color:catColor}},e.cat);
+    const statusChip=el('span',{className:'chip',style:{background:e.status==='pendiente'?'var(--alert-soft)':'var(--ambos-soft)',color:e.status==='pendiente'?'var(--alert)':'var(--ambos)',cursor:'pointer'},onClick:()=>dbToggleExpense(e.id)},e.status==='pendiente'?'Pendiente':'Liquidado');
+    topRow.append(catChip,statusChip);
+    r.appendChild(topRow);
+    r.appendChild(el('div',{style:{fontSize:12,color:'var(--ink-soft)'}},fmt(e.date)+(e.status==='pendiente'&&age>=14?' · ⚠ '+age+'d':'')));
+    r.appendChild(el('div',{className:'serif',style:{fontWeight:600,fontSize:17,margin:'6px 0 4px'}},e.desc));
+    r.appendChild(el('div',{style:{fontSize:14,color:'var(--ink-soft)'}},fmtM(e.amount)+' · Paga '+nameOf(e.paidBy)+' · '+e.split));
+    if(e.note) r.appendChild(el('div',{style:{fontSize:13,color:'var(--ink-soft)',fontStyle:'italic',marginTop:4}},e.note));
+    if(e.receipt){
+      const thumb=el('img',{style:{width:48,height:48,borderRadius:6,objectFit:'cover',marginTop:6,cursor:'pointer'},onClick:()=>{ const w=window.open('','_blank'); w.document.write('<img src="'+(e.receipt)+'" style="max-width:100%;max-height:100vh">'); }});
+      thumb.src=e.receipt;
+      r.appendChild(thumb);
+    }
+    const actions=el('div',{style:{display:'flex',gap:8,marginTop:10}});
+    const editBtn=el('button',{className:'btn-ghost',style:{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,fontSize:13},onClick:()=>{
+      UI.editingExpenseId=e.id;
+      UI.expForm={date:e.date,desc:e.desc,amount:String(e.amount),cat:e.cat,paidBy:e.paidBy,split:e.split,status:e.status,note:e.note||'',receipt:e.receipt||null,cuentaComun:!!e.cuentaComun,persona:e.persona||'Martina'};
+      UI.showExpForm=true;render();
+      setTimeout(()=>{const f=document.querySelector('.content');if(f)f.scrollIntoView({behavior:'smooth',block:'end'});},100);
+    }});
+    const editIco=el('span',{style:{width:14,height:14,display:'inline-flex'}});
+    editIco.innerHTML=ICONS.pencil;
+    editBtn.append(editIco, document.createTextNode('Editar'));
+    const delBtn=el('button',{className:'btn-ghost',style:{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,fontSize:13,color:'var(--alert)',background:'var(--alert-soft)',borderColor:'var(--alert-soft)'},onClick:()=>dbDelExpense(e.id)});
+    const delIco=el('span',{style:{width:14,height:14,display:'inline-flex'}});
+    delIco.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 5l14 14M19 5L5 19"/></svg>';
+    delBtn.append(delIco, document.createTextNode('Eliminar'));
+    actions.append(editBtn,delBtn);
+    r.appendChild(actions);
+    wrap.appendChild(r);
+  });
+
+  wrap.appendChild(el('button',{className:'btn-primary-full',style:{marginTop:6},onClick:()=>{UI.showExpForm=!UI.showExpForm;if(!UI.showExpForm){UI.editingExpenseId=null;UI.expForm={date:today(),desc:'',amount:'',cat:'Ordinario',paidBy:'J',split:'50-50',status:'pendiente',note:'',receipt:null,cuentaComun:false,persona:'Martina'};}render();}},UI.showExpForm?'Cancelar':'+ Añadir gasto'));
+
+  if(UI.showExpForm){
+    const f=UI.expForm;
+    const form=el('div',{className:'card fade-in',style:{marginTop:10}});
+    form.append(
+      row(col([lbl('Fecha'),inp('date',f.date,v=>UI.expForm.date=v)]),col([lbl('Importe (€)'),inp('number',f.amount,v=>UI.expForm.amount=v,'0.00')])),
+      el('div',{style:{marginBottom:10}},[lbl('Descripción'),inp('text',f.desc,v=>UI.expForm.desc=v,'Ej: Ortodoncia Martina')]),
+      el('div',{style:{marginBottom:10}},[lbl('¿Para quién?'),sel([['Martina','Martina'],['Rodrigo','Rodrigo'],['Carmen','Carmen'],['Ambos','Ambos hijos'],['Otro','Otro / General']],f.persona,v=>UI.expForm.persona=v)]),
+    );
+    const catSelect=el('select',{className:'input'});
+    const catExisteEnLista = EXPENSE_CATS.some(c=>c.id===f.cat);
+    if(!catExisteEnLista && f.cat){
+      // Categoría antigua (de antes de este cambio) que ya no está en la lista nueva: la mantenemos como opción para no perder el dato
+      catSelect.appendChild(el('option',{value:f.cat,selected:true},'⚠️ '+f.cat+' (categoría antigua)'));
+    }
+    EXPENSE_CATS.forEach(c=>{
+      const o=el('option',{value:c.id},c.label);
+      if(c.id===f.cat) o.selected=true;
+      catSelect.appendChild(o);
+    });
+    catSelect.addEventListener('change',e=>{
+      UI.expForm.cat=e.target.value;
+      const info=expenseCatInfo(e.target.value);
+      if(UI.expForm.cuentaComun){ /* el reparto no aplica, se queda como está */ }
+      else if(info.defaultSplit==='quien paga'){ UI.expForm.split = f.paidBy==='J' ? '100% Jorge' : '100% Eva'; }
+      else if(info.defaultSplit==='100% quien paga'){ UI.expForm.split = f.paidBy==='J' ? '100% Jorge' : '100% Eva'; }
+      else { UI.expForm.split = '50-50'; }
+      render();
+    });
+    const r2=row(
+      col([lbl('Categoría'),catSelect]),
+      col([lbl('¿Quién ha gastado?'),sel([['J','Jorge'],['E','Eva']],f.paidBy,v=>{
+        UI.expForm.paidBy=v;
+        const info=expenseCatInfo(f.cat);
+        if(!UI.expForm.cuentaComun && (info.defaultSplit==='quien paga'||info.defaultSplit==='100% quien paga')){
+          UI.expForm.split = v==='J' ? '100% Jorge' : '100% Eva';
+        }
+        render();
+      })])
+    );
+    form.appendChild(r2);
+    const catAyuda = expenseCatInfo(f.cat).ayuda;
+    if(catAyuda) form.appendChild(el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginBottom:12,padding:'7px 10px',background:'var(--bg)',borderRadius:8}},'📋 '+catAyuda));
+
+    // Toggle: con cargo a la cuenta común (no genera deuda entre progenitores, pero sí queda registrado quién lo gastó)
+    const ccWrap=el('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:12,padding:'8px 10px',background:f.cuentaComun?'var(--ambos-soft)':'var(--bg)',borderRadius:8,border:f.cuentaComun?'1px solid var(--ambos)':'1px solid transparent'}});
+    const ccChk=el('input',{type:'checkbox'});
+    ccChk.checked=!!f.cuentaComun;
+    ccChk.addEventListener('change',e=>{
+      UI.expForm.cuentaComun=e.target.checked;
+      if(e.target.checked) UI.expForm.split='Cuenta común';
+      else {
+        const info=expenseCatInfo(f.cat);
+        UI.expForm.split = info.defaultSplit==='50-50' ? '50-50' : (f.paidBy==='J'?'100% Jorge':'100% Eva');
+      }
+      render();
+    });
+    ccWrap.append(ccChk, el('label',{style:{fontSize:12,color:f.cuentaComun?'var(--ambos)':'var(--ink-soft)'}},'💰 Pagado con cargo a la cuenta común (no genera saldo pendiente entre vosotros, pero queda registrado en estadísticas quién lo gastó)'));
+    form.appendChild(ccWrap);
+
+    const splitD=el('div',{style:{marginBottom:10}});splitD.appendChild(lbl('Reparto'));
+    if(f.cuentaComun){
+      splitD.appendChild(el('div',{style:{fontSize:12,color:'var(--ink-soft)',padding:'8px 10px',background:'var(--bg)',borderRadius:8}},'Pagado desde la cuenta común — no requiere reparto adicional entre vosotros.'));
+    } else {
+      const splitR=el('div',{style:{display:'flex',gap:6}});
+      ['50-50','100% Jorge','100% Eva'].forEach(s=>{
+        splitR.appendChild(el('button',{
+          style:{flex:1,padding:'8px 4px',borderRadius:9,border:'1px solid',borderColor:f.split===s?'var(--jorge)':'var(--line)',background:f.split===s?'var(--jorge-soft)':'transparent',color:f.split===s?'var(--jorge)':'var(--ink-soft)',fontSize:11,fontWeight:f.split===s?700:400},
+          onClick:()=>{UI.expForm.split=s;render();}},s));
+      });
+      splitD.appendChild(splitR);
+    }
+    form.append(splitD,el('div',{style:{marginBottom:12}},[lbl('Nota'),inp('text',f.note,v=>UI.expForm.note=v,'Contexto...')]));
+    const errExp=el('div',{id:'expErr',style:{color:'var(--alert)',fontSize:12,marginBottom:8,minHeight:16,textAlign:'center'}},'');
+    form.appendChild(errExp);
+    form.appendChild(el('button',{className:'btn-primary',style:{width:'100%'},id:'expSaveBtn',onClick:async()=>{
+      const err=document.getElementById('expErr');
+      const btn=document.getElementById('expSaveBtn');
+      if(!f.desc||!f.desc.trim()){ err.textContent='Escribe una descripción del gasto.'; return; }
+      const montoNum = parseFloat(String(f.amount).replace(',','.'));
+      if(!f.amount || isNaN(montoNum) || montoNum<=0){ err.textContent='Introduce un importe válido (ej: 25.50).'; return; }
+      err.textContent=''; btn.disabled=true; btn.textContent='Guardando…';
+      try{
+        f.amount = montoNum; // normaliza coma decimal a punto antes de guardar
+        if(UI.editingExpenseId){ await dbUpdExpense(UI.editingExpenseId,f); }
+        else { await dbAddExpense(f); }
+        UI.editingExpenseId=null;
+        UI.showExpForm=false;UI.expForm={date:today(),desc:'',amount:'',cat:'Ordinario',paidBy:'J',split:'50-50',status:'pendiente',note:'',receipt:null,cuentaComun:false,persona:'Martina'};
+        render();
+      }catch(e){
+        console.error('Error guardando gasto:', e);
+        err.textContent='Error al guardar: '+(e.message||'inténtalo de nuevo');
+        btn.disabled=false; btn.textContent=UI.editingExpenseId?'Guardar cambios':'Guardar gasto';
+      }
+    }},UI.editingExpenseId?'Guardar cambios':'Guardar gasto'));
+    wrap.appendChild(form);
+  }
+  return wrap;
+}
+
+// ── FICHA ─────────────────────────────────────────────────────────────────────
+function renderFicha(){
+  const {child,wishlist}=S;
+  const wrap=el('div',{});
+  const fields=[['dob','Fecha nacimiento','date'],['school','Colegio','text'],['doctor','Médico','text'],['ss','Nº SS','text'],['allergies','Alergias','text'],['size_clothes','Talla ropa','text'],['size_shoes','Talla zapatos','text'],['tutor1','Tutor autorizado 1','text'],['tutor2','Tutor autorizado 2','text']];
+
+  const c=el('div',{className:'card',style:{marginBottom:14}});
+  const ch=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}});
+  const av=el('div',{style:{display:'flex',alignItems:'center',gap:12}});
+  av.append(el('div',{style:{width:44,height:44,borderRadius:'50%',padding:2,background:'linear-gradient(135deg,var(--jorge),var(--eva))',flexShrink:0},},[
+    el('div',{className:'serif',style:{width:'100%',height:'100%',borderRadius:'50%',background:'var(--paper)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:600,fontSize:16,color:'var(--ink)'}},(child.name||'M').charAt(0).toUpperCase())
+  ]));
+  const ai=el('div',{});
+  ai.appendChild(el('div',{className:'serif',style:{fontWeight:600,fontSize:17}},child.name||'Menor'));
+  if(child.dob) ai.appendChild(el('div',{style:{fontSize:12,color:'var(--ink-soft)'}},'Nacida el '+(fmt(child.dob))+' · '+(Math.floor((Date.now()-new Date(child.dob+'T12:00:00'))/31536000000))+' años'));
+  av.appendChild(ai);
+  const editChildBtn=el('button',{className:'btn-ghost',style:{fontSize:11,display:'flex',alignItems:'center',gap:5},onClick:()=>{UI.childEditing=!UI.childEditing;UI.childDraft={...child};render();}});
+  if(!UI.childEditing){
+    const icoEdC=el('span',{style:{width:12,height:12,display:'inline-flex'}});
+    icoEdC.innerHTML=ICONS.pencil;
+    editChildBtn.append(icoEdC,document.createTextNode('Editar'));
+  } else { editChildBtn.textContent='Cancelar'; }
+  ch.append(av,editChildBtn);
+  c.appendChild(ch);
+
+  if(UI.childEditing){
+    c.append(el('div',{style:{marginBottom:10}},[lbl('Nombre'),inp('text',UI.childDraft.name||'',v=>UI.childDraft.name=v)]));
+    fields.forEach(([k,label,type])=>c.append(el('div',{style:{marginBottom:10}},[lbl(label),inp(type,UI.childDraft[k]||'',v=>UI.childDraft[k]=v,label)])));
+    const ta=el('textarea',{className:'input',style:{minHeight:60,resize:'vertical'}});ta.value=UI.childDraft.notes||'';ta.addEventListener('input',e=>UI.childDraft.notes=e.target.value);
+    c.append(el('div',{style:{marginBottom:12}},[lbl('Notas'),ta]));
+    const errChild=el('div',{id:'childErr',style:{color:'var(--alert)',fontSize:12,marginBottom:8,minHeight:16,textAlign:'center'}},'');
+    c.appendChild(errChild);
+    c.appendChild(el('button',{className:'btn-primary',style:{width:'100%'},id:'childSaveBtn',onClick:async()=>{
+      const btn=document.getElementById('childSaveBtn');
+      const err=document.getElementById('childErr');
+      btn.disabled=true; btn.style.opacity='0.6'; btn.textContent='Guardando…';
+      try{
+        await dbSaveChild(UI.childDraft);
+        UI.childEditing=false;
+        render();
+      }catch(e){
+        console.error('Error guardando ficha:', e);
+        err.textContent='No se pudo guardar: '+(e.message||'inténtalo de nuevo')+'.';
+        btn.disabled=false; btn.style.opacity='1'; btn.textContent='Guardar ficha';
+      }
+    }},'Guardar ficha'));
+  } else {
+    if(!fields.some(([k])=>child[k])) c.appendChild(el('div',{style:{color:'var(--ink-soft)',fontSize:13,padding:'8px 0'}},'Pulsa Editar para añadir información'));
+    fields.filter(([k])=>child[k]).forEach(([k,label])=>{
+      const r=el('div',{style:{display:'flex',padding:'7px 0',borderBottom:'1px solid var(--bg)'}});
+      r.append(el('div',{style:{width:140,fontSize:11,color:'var(--ink-soft)',flexShrink:0}},label),el('div',{style:{fontSize:13}},k==='dob'?fmt(child[k]):child[k]));
+      c.appendChild(r);
+    });
+    if(child.notes) c.appendChild(el('div',{style:{marginTop:10,padding:'8px 10px',background:'var(--bg)',borderRadius:8,fontSize:12,color:'var(--ink-soft)'}},child.notes));
+  }
+  wrap.appendChild(c);
+
+  // Wishlist
+  const wc=el('div',{className:'card'});
+  const wh=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}});
+  wh.append(titleIcon('gift','Lista de deseos',{fontWeight:700,fontSize:14}),el('button',{className:'btn-ghost',style:{fontSize:11},onClick:()=>{UI.showWishForm=!UI.showWishForm;render();}},UI.showWishForm?'Cancelar':'+ Añadir'));
+  wc.appendChild(wh);
+
+  if(UI.showWishForm){
+    const wf=UI.wishForm;
+    const wForm=el('div',{className:'card-dark',style:{marginBottom:12}});
+    wForm.append(el('div',{style:{marginBottom:8}},[lbl('Artículo'),inp('text',wf.item,v=>UI.wishForm.item=v,'Ej: Zapatillas talla 36')]));
+    wForm.append(row(col([lbl('Prioridad'),sel([['alta','Alta'],['normal','Normal'],['baja','Baja']],wf.priority,v=>UI.wishForm.priority=v)]),col([lbl('Propuesto por'),sel([['J','Jorge'],['E','Eva']],wf.requestedBy,v=>UI.wishForm.requestedBy=v)])));
+    const errWish=el('div',{id:'wishErr',style:{color:'var(--alert)',fontSize:12,marginBottom:8,minHeight:16,textAlign:'center'}},'');
+    wForm.appendChild(errWish);
+    wForm.appendChild(el('button',{className:'btn-primary',style:{width:'100%'},id:'wishSaveBtn',onClick:async()=>{
+      const btn=document.getElementById('wishSaveBtn');
+      const err=document.getElementById('wishErr');
+      if(!UI.wishForm.item.trim()){ err.textContent='Escribe un artículo.'; return; }
+      err.textContent='';
+      btn.disabled=true; btn.style.opacity='0.6'; btn.textContent='Guardando…';
+      try{
+        await dbAddWish(UI.wishForm);
+        UI.showWishForm=false;
+        UI.wishForm={item:'',priority:'normal',requestedBy:'J'};
+        render();
+      }catch(e){
+        console.error('Error guardando deseo:', e);
+        err.textContent='No se pudo guardar: '+(e.message||'inténtalo de nuevo')+'.';
+        btn.disabled=false; btn.style.opacity='1'; btn.textContent='Añadir';
+      }
+    }},'Añadir'));
+    wc.appendChild(wForm);
+  }
+
+  const priC={alta:'var(--alert)',normal:'var(--jorge)',baja:'var(--ambos)'};
+  ['alta','normal','baja'].forEach(p=>{
+    const items=wishlist.filter(w=>w.priority===p);if(!items.length)return;
+    wc.appendChild(el('div',{style:{fontSize:10,fontWeight:700,color:priC[p],textTransform:'uppercase',letterSpacing:.5,marginBottom:6,marginTop:10}},'Prioridad '+(p)+''));
+    items.forEach(w=>{
+      const r=el('div',{style:{display:'flex',alignItems:'center',gap:8,padding:'7px 0',borderBottom:'1px solid var(--bg)',opacity:w.done?0.5:1}});
+      const chk=el('button',{style:{width:20,height:20,borderRadius:4,border:'1px solid',borderColor:w.done?'var(--ambos)':'var(--line)',background:w.done?'var(--ambos)':'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:10},onClick:()=>dbToggleWish(w.id)},w.done?'✓':'');
+      r.append(chk,el('div',{style:{flex:1,fontSize:13,textDecoration:w.done?'line-through':'none',color:w.done?'var(--ink-soft)':'var(--ink)'}},w.item),badge(nameOf(w.requestedBy),'badge-'+(w.requestedBy==='J'?'J':'E')),el('button',{style:{background:'none',border:'none',color:'var(--ink-soft)',fontSize:12,cursor:'pointer'},onClick:()=>dbDelWish(w.id)},'✕'));
+      wc.appendChild(r);
+    });
+  });
+  if(!wishlist.length) wc.appendChild(el('div',{style:{color:'var(--ink-soft)',fontSize:13,padding:'10px 0'}},'Sin artículos'));
+  wrap.appendChild(wc);
+  return wrap;
+}
+
+// ── ACUERDOS + MENSAJES ───────────────────────────────────────────────────────
+function renderAcuerdos(){
+  const {agreements}=S;
+  const wrap=el('div',{});
+
+  if(UI.agSubTab===0){
+    const pendientesAg=agreements.filter(a=>a.status==='pendiente');
+    const active=agreements.filter(a=>a.status==='activo');
+    const archived=agreements.filter(a=>a.status==='archivado');
+    if(pendientesAg.length){
+      wrap.appendChild(titleIcon('clipboard','Pendientes de confirmar ('+pendientesAg.length+')',{fontSize:11,fontWeight:700,color:'var(--eva)',marginTop:18,marginBottom:8,textTransform:'uppercase',letterSpacing:.5}));
+      pendientesAg.forEach(a=>{
+        const mia=a.created_by===S.user.role;
+        const c=CAT_COLORS[a.category]||'var(--ink-soft)';
+        const r=el('div',{className:'card',style:{marginBottom:10,borderLeft:'3px solid var(--eva)',padding:'12px 14px'}});
+        const info=el('div',{});
+        info.append(el('div',{style:{display:'flex',gap:6,marginBottom:4,alignItems:'center'}},[el('span',{className:'chip',style:{background:c+'22',color:c}},a.category),el('span',{style:{fontSize:10,color:'var(--ink-soft)'}},fmt(a.date))]));
+        info.append(el('div',{className:'serif',style:{fontWeight:600,fontSize:15,marginBottom:a.detail?3:0}},a.title));
+        if(a.detail) info.appendChild(el('div',{style:{fontSize:12,color:'var(--ink-soft)',lineHeight:1.5}},a.detail));
+        r.appendChild(info);
+        if(!mia){
+          const btns=el('div',{style:{display:'flex',gap:6,marginTop:10}});
+          btns.append(
+            el('button',{className:'btn-success',onClick:()=>dbConfirmAgreement(a.id)},'✓ Confirmar'),
+            el('button',{className:'btn-danger',onClick:()=>dbDelAgreement(a.id)},'✗ Rechazar')
+          );
+          r.appendChild(btns);
+        } else {
+          r.appendChild(el('div',{style:{fontSize:11,color:'var(--ink-soft)',fontStyle:'italic',marginTop:8}},'Esperando confirmación de '+nameOf(a.created_by==='J'?'E':'J')));
+        }
+        wrap.appendChild(r);
+      });
+    }
+    if(!active.length&&!pendientesAg.length&&!UI.showAgForm) wrap.appendChild(el('div',{style:{color:'var(--ink-soft)',fontSize:13,padding:'20px 0',textAlign:'center'}},'Sin acuerdos activos'));
+    active.forEach(a=>{
+      const c=CAT_COLORS[a.category]||'var(--ink-soft)';
+      const r=el('div',{className:'card',style:{marginBottom:10,borderLeft:'3px solid '+(c)+'',padding:'12px 14px'}});
+      const t=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'start'}});
+      const info=el('div',{style:{flex:1}});
+      info.append(el('div',{style:{display:'flex',gap:6,marginBottom:4,alignItems:'center'}},[el('span',{className:'chip',style:{background:c+'22',color:c}},a.category),el('span',{style:{fontSize:10,color:'var(--ink-soft)'}},fmt(a.date))]));
+      info.append(el('div',{className:'serif',style:{fontWeight:600,fontSize:15,marginBottom:a.detail?3:0}},a.title));
+      if(a.detail) info.appendChild(el('div',{style:{fontSize:12,color:'var(--ink-soft)',lineHeight:1.5}},a.detail));
+      const btns=el('div',{style:{display:'flex',flexDirection:'column',gap:5,marginLeft:10}});
+      btns.append(el('button',{className:'btn-ghost',style:{fontSize:10},onClick:()=>dbToggleAgreement(a.id)},'Archivar'),el('button',{className:'btn-danger',onClick:()=>dbDelAgreement(a.id)},'✕'));
+      t.append(info,btns);r.appendChild(t);wrap.appendChild(r);
+    });
+    // Templates button
+    wrap.appendChild(el('button',{className:'btn-outline-full',onClick:()=>{UI.agTemplateOpen=!UI.agTemplateOpen;render();}},UI.agTemplateOpen?'Cerrar plantillas':'Usar plantilla de acuerdo'));
+    if(UI.agTemplateOpen){
+      const tmplWrap=el('div',{className:'card-dark',style:{marginBottom:12}});
+      tmplWrap.appendChild(el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginBottom:10}},'Selecciona una plantilla para editar y guardar:'));
+      // Group by category
+      const cats=[...new Set(AG_TEMPLATES.map(t=>t.category))];
+      cats.forEach(cat=>{
+        tmplWrap.appendChild(el('div',{style:{fontSize:10,fontWeight:700,color:'var(--ink-soft)',textTransform:'uppercase',letterSpacing:.5,marginBottom:6,marginTop:8}},cat));
+        AG_TEMPLATES.filter(t=>t.category===cat).forEach(t=>{
+          const tb=el('button',{
+            style:{display:'block',width:'100%',textAlign:'left',padding:'9px 12px',marginBottom:6,background:'var(--paper)',border:'1px solid var(--line)',borderRadius:9,cursor:'pointer'},
+            onClick:()=>{
+              UI.agForm={date:today(),title:t.title,detail:t.detail,category:t.category};
+              UI.agTemplateOpen=false;
+              UI.showAgForm=true;
+              render();
+            }
+          });
+          tb.append(el('div',{className:'serif',style:{fontSize:14,fontWeight:600,color:'var(--ink)',marginBottom:2}},t.title),el('div',{style:{fontSize:11,color:'var(--ink-soft)'}},t.detail.slice(0,60)+'…'));
+          tmplWrap.appendChild(tb);
+        });
+      });
+      wrap.appendChild(tmplWrap);
+    }
+    wrap.appendChild(el('button',{className:'btn-primary-full',style:{marginBottom:10},onClick:()=>{UI.showAgForm=!UI.showAgForm;render();}},UI.showAgForm?'Cancelar':'+ Registrar acuerdo'));
+    if(UI.showAgForm){
+      const f=UI.agForm;
+      const form=el('div',{className:'card fade-in',style:{marginBottom:12}});
+      form.append(
+        row(col([lbl('Fecha'),inp('date',f.date,v=>UI.agForm.date=v)]),col([lbl('Categoría'),sel(Object.keys(CAT_COLORS).map(k=>[k,k]),f.category,v=>UI.agForm.category=v)])),
+        el('div',{style:{marginBottom:10}},[lbl('Acuerdo'),inp('text',f.title,v=>UI.agForm.title=v,'Ej: Martina empieza natación los martes')]),
+      );
+      const ta=el('textarea',{className:'input',style:{minHeight:70,resize:'vertical'}});ta.value=f.detail;ta.addEventListener('input',e=>UI.agForm.detail=e.target.value);
+      form.append(el('div',{style:{marginBottom:12}},[lbl('Detalle'),ta]));
+      const errAg=el('div',{id:'agErr',style:{color:'var(--alert)',fontSize:12,marginBottom:8,minHeight:16,textAlign:'center'}},'');
+      form.appendChild(errAg);
+      form.appendChild(el('button',{className:'btn-primary',style:{width:'100%'},id:'agSaveBtn',onClick:async()=>{
+        const btn=document.getElementById('agSaveBtn');
+        const err=document.getElementById('agErr');
+        if(!UI.agForm.title.trim()){ err.textContent='Escribe el título del acuerdo.'; return; }
+        err.textContent='';
+        btn.disabled=true; btn.style.opacity='0.6'; btn.textContent='Guardando…';
+        try{
+          await dbAddAgreement(UI.agForm);
+          UI.showAgForm=false;
+          UI.agForm={date:today(),title:'',detail:'',category:'General'};
+          render();
+        }catch(e){
+          console.error('Error guardando acuerdo:', e);
+          err.textContent='No se pudo guardar: '+(e.message||'inténtalo de nuevo')+'.';
+          btn.disabled=false; btn.style.opacity='1'; btn.textContent='Guardar';
+        }
+      }},'Guardar'));
+      wrap.appendChild(form);
+    }
+    if(archived.length){
+      wrap.appendChild(el('div',{style:{fontSize:11,fontWeight:700,color:'var(--ink-soft)',marginTop:16,marginBottom:8,textTransform:'uppercase',letterSpacing:.5}},'Archivados ('+(archived.length)+')'));
+      archived.forEach(a=>{
+        const r=el('div',{className:'card',style:{marginBottom:8,opacity:.5,padding:'10px 14px'}});
+        const t=el('div',{style:{display:'flex',justifyContent:'space-between'}});
+        t.append(el('div',{},[el('div',{style:{fontSize:10,color:'var(--ink-soft)',marginBottom:2}},fmt(a.date)+' · '+a.category),el('div',{style:{fontSize:13,fontWeight:600}},a.title)]),el('button',{className:'btn-ghost',style:{fontSize:10,alignSelf:'start'},onClick:()=>dbToggleAgreement(a.id)},'Restaurar'));
+        r.appendChild(t);wrap.appendChild(r);
+      });
+    }
+  }
+
+  return wrap;
+}
+
+
+
+
+// ── Export messages to PDF ────────────────────────────────────────────────────
+function exportMessagesPDF(){
+  const {messages,child}=S;
+  const now=new Date().toLocaleDateString('es-ES');
+  const rows=messages.map(m=>`
+    <tr>
+      <td style="width:80px;color:#8A8479;font-size:10px">${new Date(m.ts).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
+      <td style="width:50px;font-weight:700;color:${m.from==='J'?'#3B8FD9':'#C9578A'}">${nameOf(m.from)}</td>
+      <td style="font-size:12px">${m.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>
+    </tr>`).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Registro de comunicaciones</title>
+<style>body{font-family:Arial,sans-serif;font-size:12px;color:#2B2724;margin:30px;line-height:1.5}
+h1{font-size:18px;margin-bottom:4px}h2{font-size:13px;color:#3B8FD9;margin:18px 0 8px;border-bottom:1px solid #E5E0D8;padding-bottom:3px}
+table{width:100%;border-collapse:collapse}td{padding:7px 9px;border-bottom:1px solid #E5E0D8;vertical-align:top}
+.meta{color:#8A8479;font-size:11px;margin-bottom:20px}.footer{margin-top:28px;font-size:10px;color:#8A8479;border-top:1px solid #E5E0D8;padding-top:8px}</style>
+</head><body>
+<h1>💬 Registro de comunicaciones</h1>
+<div class="meta">Jorge · Eva · ${child.name||'Martina'} · Generado el ${now} · ${messages.length} mensajes</div>
+<h2>Historial completo</h2>
+<table>${rows}</table>
+<div class="footer">Documento de registro privado con sello de tiempo. Los mensajes no han sido editados ni eliminados desde su envío.</div>
+</body></html>`;
+  const w=window.open('','_blank');w.document.write(html);w.document.close();setTimeout(()=>w.print(),400);
+}
+
+// ── Alert config helpers ──────────────────────────────────────────────────────
+function saveAlertConfig(days){
+  UI.alertDaysBefore=days;
+  localStorage.setItem('cp:alertDays',String(days));
+  checkAndSendUpcomingReminders();
+}
+
+// Envía un email de recordatorio cuando un cambio de custodia real está a
+// exactamente `alertDaysBefore` días vista. Se comprueba cada vez que se
+// carga la app (no requiere navegador abierto en el momento exacto, a
+// diferencia de las notificaciones push). Un registro en localStorage evita
+// reenviar el mismo aviso varias veces el mismo día.
+async function checkAndSendUpcomingReminders(){
+  if(!S.user) return;
+  const daysBefore=UI.alertDaysBefore;
+  const todayStr=today();
+  const custodyOnDay = dateStr => { const e=S.events.find(x=>x.from<=dateStr&&x.to>=dateStr&&x.changeStatus!=='rechazado'); return e?e.who:null; };
+  const targetDate=addDays(todayStr,daysBefore);
+  const sentKey='cp:remindersSent:'+todayStr;
+  let sent=[];
+  try{ sent=JSON.parse(localStorage.getItem(sentKey)||'[]'); }catch{}
+
+  const candidatos=S.events.filter(ev=>
+    ev.from===targetDate && ev.changeStatus!=='rechazado' &&
+    custodyOnDay(addDays(ev.from,-1))!==ev.who
+  );
+
+  for(const ev of candidatos){
+    const evId=String(ev.id);
+    if(sent.includes(evId)) continue;
+    const params={
+      from_name:'Recordatorio automático',
+      action:'Próximo cambio de custodia en '+daysBefore+' día'+(daysBefore>1?'s':''),
+      who:nameOf(ev.who),
+      from_date:fmt(ev.from), to_date:fmt(ev.to||ev.from),
+      note:ev.note||'',
+      days:'', app_url:window.location.origin+window.location.pathname,
+    };
+    for(const toEmail of [EMAIL_JORGE, EMAIL_EVA]){
+      try{ await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {...params, to_email:toEmail}); }
+      catch(e){ console.warn('Error enviando recordatorio a', toEmail, e); }
+    }
+    sent.push(evId);
+  }
+  if(candidatos.length) localStorage.setItem(sentKey, JSON.stringify(sent));
+}
+
+
+// ── Activity log (local + shared via messages meta) ───────────────────────────
+function logActivity(action, entity, detail){
+  try {
+    const logs = JSON.parse(localStorage.getItem('cp:actlog')||'[]');
+    logs.unshift({ts:new Date().toISOString(), user:S.user?.role||'?', action, entity, detail});
+    localStorage.setItem('cp:actlog', JSON.stringify(logs.slice(0,100))); // keep last 100
+  } catch{}
+}
+function getActivityLog(){
+  try { return JSON.parse(localStorage.getItem('cp:actlog')||'[]'); } catch { return []; }
+}
+
+// ── AI EVENT PARSER ───────────────────────────────────────────────────────────
+
+// ── MENSAJES (hilo único, inmutable) ──────────────────────────────────────────
+function renderMensajes(){
+  markMessagesSeen(); // al entrar en esta pestaña, todo queda como visto
+  const wrap=el('div',{});
+
+  // Unifica notas y mensajes en un único hilo cronológico
+  const hilo=[
+    ...S.notes.map(n=>({id:'n'+n.id,ts:n.created_at,from:n.from_user,text:n.text,color:n.color,tipo:'nota',rawId:n.id})),
+    ...S.messages.map(m=>({id:'m'+m.id,ts:m.ts,from:m.from,text:m.text,color:null,tipo:'mensaje',rawId:m.id})),
+  ].sort((a,b)=>a.ts.localeCompare(b.ts));
+
+  const q=(UI.msgSearchQuery||'').trim().toLowerCase();
+  const hiloFiltrado=q?hilo.filter(h=>h.text.toLowerCase().includes(q)):hilo;
+
+  const toolbar=el('div',{style:{display:'flex',gap:8,marginBottom:10,alignItems:'center'}});
+  const searchInp=el('input',{className:'input',placeholder:'Buscar en los mensajes…',style:{flex:1,fontSize:13}});
+  searchInp.value=UI.msgSearchQuery||'';
+  searchInp.addEventListener('input',e=>{UI.msgSearchQuery=e.target.value;render();});
+  toolbar.append(searchInp,el('button',{className:'btn-ghost',style:{fontSize:11,flexShrink:0,whiteSpace:'nowrap'},onClick:exportMessagesPDF},'Exportar'));
+  wrap.appendChild(toolbar);
+
+  wrap.appendChild(el('div',{className:'card-dark',style:{padding:'7px 12px',marginBottom:10,fontSize:11,color:'var(--ink-soft)'}},'Con sello de tiempo. No se pueden editar ni borrar una vez enviados.'));
+
+  const mb=el('div',{className:'msg-area',id:'msgBox'});
+  if(!hiloFiltrado.length) mb.appendChild(el('div',{style:{textAlign:'center',color:'var(--ink-soft)',padding:'60px 0',fontSize:13}},q?'Sin resultados':'Sin mensajes'));
+  hiloFiltrado.forEach(h=>{
+    const isMe=h.from===S.user?.role;
+    const mw=el('div',{style:{display:'flex',justifyContent:isMe?'flex-end':'flex-start',marginBottom:10}});
+    const mi=el('div',{style:{maxWidth:'75%'}});
+    mi.append(
+      el('div',{className:isMe?'bubble-J':'bubble-E',style:{fontSize:13,lineHeight:1.5}},h.text),
+      el('div',{style:{fontSize:10,color:'var(--ink-soft)',marginTop:3,textAlign:isMe?'right':'left'}},nameOf(h.from)+' · '+new Date(h.ts).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))
+    );
+    mw.appendChild(mi);mb.appendChild(mw);
+  });
+  setTimeout(()=>{const b=document.getElementById('msgBox');if(b)b.scrollTop=b.scrollHeight;},50);
+  wrap.appendChild(mb);
+
+  const ir=el('div',{style:{display:'flex',gap:8,alignItems:'start',marginTop:10}});
+  const ta=el('textarea',{className:'input',style:{flex:1,minHeight:44,resize:'none',lineHeight:1.5}});
+  ta.placeholder='Escribe un mensaje… (Enter para enviar)';
+  const enviar=async()=>{
+    const t=ta.value.trim();
+    if(!t) return;
+    await dbSendMsg(t);
+    ta.value='';
+  };
+  ta.addEventListener('keydown',async e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();await enviar();}});
+  ir.append(ta,el('button',{className:'btn-primary',style:{padding:'10px 14px',flexShrink:0},onClick:enviar},'→'));
+  wrap.appendChild(ir);
+
+  return wrap;
+}
+
+// ── STATS ─────────────────────────────────────────────────────────────────────
+function renderStats(){
+  const wrap=el('div',{});
+  const now=new Date();
+  // Días de custodia (solo para detectar si hay datos, sin mostrar comparativa)
+  const cd={J:0,E:0,ambos:0};
+  S.events.forEach(ev=>{
+    if(ev.changeStatus==='rechazado') return;
+    let d=new Date(ev.from+'T12:00:00'),end=new Date(ev.to+'T12:00:00');
+    while(d<=end){cd[ev.who]=(cd[ev.who]||0)+1;d.setDate(d.getDate()+1);}
+  });
+  const td=cd.J+cd.E+cd.ambos;
+
+  // ── Monthly expenses last 6 months ──
+  const monthly={};
+  for(let i=5;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    monthly[key]={total:0,J:0,E:0,label:MONTHS[d.getMonth()]};
+  }
+  S.expenses.forEach(e=>{
+    const key=e.date.slice(0,7);
+    if(monthly[key]){
+      const a=parseFloat(e.amount||0);
+      monthly[key].total+=a;
+      monthly[key][e.paidBy]=(monthly[key][e.paidBy]||0)+a;
+    }
+  });
+  const entries=Object.entries(monthly);
+  const maxVal=Math.max(...entries.map(([,v])=>v.total),1);
+
+  if(entries.some(([,v])=>v.total>0)){
+    const ec=el('div',{className:'card',style:{marginBottom:14}});
+    ec.appendChild(titleIcon('chart','Gastos últimos 6 meses',{fontWeight:700,fontSize:14,marginBottom:14}));
+    const chart=el('div',{style:{display:'flex',gap:6,alignItems:'flex-end',height:100,marginBottom:8}});
+    entries.forEach(([key,v])=>{
+      const col2=el('div',{style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}});
+      if(v.total>0) col2.appendChild(el('div',{style:{fontSize:9,color:'var(--ink-soft)',textAlign:'center'}},Math.round(v.total)+'€'));
+      const barWrap=el('div',{style:{width:'100%',display:'flex',flexDirection:'column',justifyContent:'flex-end',height:80,gap:1}});
+      // Stacked: Jorge on bottom, Eva on top
+      const jH=Math.round((v.J/maxVal)*78);
+      const eH=Math.round((v.E/maxVal)*78);
+      if(v.E>0) barWrap.appendChild(el('div',{style:{width:'100%',height:eH+'px',background:'var(--eva)',borderRadius:'3px 3px 0 0',minHeight:v.E>0?3:0}}));
+      if(v.J>0) barWrap.appendChild(el('div',{style:{width:'100%',height:jH+'px',background:'var(--jorge)',borderRadius:v.E>0?0:'3px 3px 0 0',minHeight:v.J>0?3:0}}));
+      if(v.total===0) barWrap.appendChild(el('div',{style:{width:'100%',height:4,background:'var(--paper)',borderRadius:3}}));
+      col2.appendChild(barWrap);
+      col2.appendChild(el('div',{style:{fontSize:9,color:'var(--ink-soft)',textAlign:'center'}},v.label));
+      chart.appendChild(col2);
+    });
+    ec.appendChild(chart);
+    // Legend
+    const leg=el('div',{style:{display:'flex',gap:14,marginTop:4}});
+    [['var(--jorge)','Jorge'],['var(--eva)','Eva']].forEach(([c,l])=>{
+      const d=el('div',{style:{display:'flex',alignItems:'center',gap:5}});
+      d.append(el('div',{style:{width:10,height:10,borderRadius:2,background:c}}),el('span',{style:{fontSize:11,color:'var(--ink-soft)'}},l));
+      leg.appendChild(d);
+    });
+    ec.appendChild(leg);
+    wrap.appendChild(ec);
+  }
+
+  // ── Cuenta común: quién gasta y en qué ──
+  const gastosComunes = S.expenses.filter(e=>e.cuentaComun);
+  if(gastosComunes.length>0){
+    const cc=el('div',{className:'card',style:{marginBottom:14,borderColor:'var(--ambos)'}});
+    cc.appendChild(titleIcon('wallet','Cuenta común — quién gasta',{fontWeight:700,fontSize:14,marginBottom:4,color:'var(--ambos)'}));
+    cc.appendChild(el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginBottom:12}},'Gastos con cargo al fondo compartido. No generan saldo pendiente entre vosotros.'));
+
+    const porPersona = {J:0, E:0};
+    gastosComunes.forEach(e=>{ porPersona[e.paidBy] = (porPersona[e.paidBy]||0) + parseFloat(e.amount||0); });
+    const totalComun = porPersona.J + porPersona.E;
+
+    const barCC=el('div',{style:{display:'flex',height:14,borderRadius:7,overflow:'hidden',marginBottom:10}});
+    if(porPersona.J>0) barCC.appendChild(el('div',{style:{flex:porPersona.J,background:'var(--jorge)'}}));
+    if(porPersona.E>0) barCC.appendChild(el('div',{style:{flex:porPersona.E,background:'var(--eva)'}}));
+    cc.appendChild(barCC);
+
+    const rowCC=el('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:14}});
+    [['J','Jorge','var(--jorge)'],['E','Eva','var(--eva)']].forEach(([k,l,color])=>{
+      const s=el('div',{style:{textAlign:'center',padding:'10px 6px',background:'var(--bg)',borderRadius:10,border:'1px solid '+color+'22'}});
+      s.append(
+        el('div',{style:{fontWeight:800,fontSize:16,color:color}},fmtM(porPersona[k])),
+        el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginTop:2}},l+' · '+(totalComun>0?Math.round(porPersona[k]/totalComun*100):0)+'%')
+      );
+      rowCC.appendChild(s);
+    });
+    cc.appendChild(rowCC);
+
+    // Por categoría dentro de la cuenta común
+    const catComun={};
+    gastosComunes.forEach(e=>{ catComun[e.cat]=(catComun[e.cat]||0)+parseFloat(e.amount||0); });
+    const topCatComun=Object.entries(catComun).sort((a,b)=>b[1]-a[1]);
+    if(topCatComun.length){
+      cc.appendChild(el('div',{style:{fontSize:11,fontWeight:700,color:'var(--ink-soft)',marginBottom:8,textTransform:'uppercase',letterSpacing:.5}},'Por categoría'));
+      topCatComun.forEach(([cat,amt])=>{
+        const r=el('div',{style:{display:'flex',justifyContent:'space-between',padding:'5px 0',borderBottom:'1px solid var(--bg)'}});
+        r.append(el('span',{style:{fontSize:12}},cat),el('span',{style:{fontSize:12,fontWeight:700}},fmtM(amt)+' ('+Math.round(amt/totalComun*100)+'%)'));
+        cc.appendChild(r);
+      });
+    }
+
+    // Por persona destinataria (Martina/Rodrigo/Carmen) dentro de la cuenta común
+    const porHijo={};
+    gastosComunes.forEach(e=>{ const p=e.persona||'Martina'; porHijo[p]=(porHijo[p]||0)+parseFloat(e.amount||0); });
+    const topHijo=Object.entries(porHijo).sort((a,b)=>b[1]-a[1]);
+    if(topHijo.length>1 || (topHijo.length===1 && topHijo[0][0]!=='Martina')){
+      cc.appendChild(el('div',{style:{fontSize:11,fontWeight:700,color:'var(--ink-soft)',marginBottom:8,marginTop:12,textTransform:'uppercase',letterSpacing:.5}},'Por hijo/a'));
+      topHijo.forEach(([persona,amt])=>{
+        const r=el('div',{style:{display:'flex',justifyContent:'space-between',padding:'5px 0',borderBottom:'1px solid var(--bg)'}});
+        r.append(el('span',{style:{fontSize:12}},persona),el('span',{style:{fontSize:12,fontWeight:700}},fmtM(amt)));
+        cc.appendChild(r);
+      });
+    }
+
+    cc.appendChild(el('div',{style:{display:'flex',justifyContent:'center',paddingTop:10,marginTop:10,borderTop:'1px solid var(--ambos)'}},[
+      el('div',{style:{textAlign:'center'}},[el('div',{style:{fontWeight:800,fontSize:18,color:'var(--ambos)'}},fmtM(totalComun)),el('div',{style:{fontSize:11,color:'var(--ink-soft)'}},'Total cuenta común')])
+    ]));
+    wrap.appendChild(cc);
+  }
+
+  // ── Expense breakdown ──
+  const byCat={};
+  S.expenses.forEach(e=>{byCat[e.cat]=(byCat[e.cat]||0)+parseFloat(e.amount||0);});
+  const topCats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+  const totalExp=S.expenses.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+
+  if(topCats.length>0){
+    const bc=el('div',{className:'card',style:{marginBottom:14}});
+    bc.appendChild(titleIcon('chart','Gastos por categoría',{fontWeight:700,fontSize:14,marginBottom:12}));
+    topCats.forEach(([cat,amt])=>{
+      const r=el('div',{style:{marginBottom:10}});
+      const t=el('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:4}});
+      t.append(el('span',{style:{fontSize:13}},cat),el('span',{style:{fontSize:13,fontWeight:700}},fmtM(amt)+' ('+Math.round(amt/totalExp*100)+'%)'));
+      const barWrap=el('div',{style:{height:6,background:'var(--bg)',borderRadius:3,overflow:'hidden'}});
+      barWrap.appendChild(el('div',{style:{height:'100%',background:'var(--jorge)',width:(amt/totalExp*100)+'%',borderRadius:3}}));
+      r.append(t,barWrap);bc.appendChild(r);
+    });
+    // Totals
+    const pend=S.expenses.filter(e=>e.status==='pendiente').reduce((s,e)=>s+parseFloat(e.amount||0),0);
+    bc.appendChild(el('div',{style:{display:'flex',justifyContent:'space-between',paddingTop:10,borderTop:'1px solid var(--bg)',marginTop:4}},[
+      el('div',{style:{textAlign:'center'}},[el('div',{style:{fontWeight:800,fontSize:16}},fmtM(totalExp)),el('div',{style:{fontSize:11,color:'var(--ink-soft)'}},'Total')]),
+      el('div',{style:{textAlign:'center'}},[el('div',{style:{fontWeight:800,fontSize:16,color:'var(--alert)'}},fmtM(pend)),el('div',{style:{fontSize:11,color:'var(--ink-soft)'}},'Pendiente')]),
+      el('div',{style:{textAlign:'center'}},[el('div',{style:{fontWeight:800,fontSize:16,color:'var(--ambos)'}},fmtM(totalExp-pend)),el('div',{style:{fontSize:11,color:'var(--ink-soft)'}},'Liquidado')]),
+    ]));
+    wrap.appendChild(bc);
+  }
+
+  // ── Agreements by category ──
+  const byAg={};
+  S.agreements.filter(a=>a.status==='activo').forEach(a=>{byAg[a.category]=(byAg[a.category]||0)+1;});
+  if(Object.keys(byAg).length>0){
+    const ac=el('div',{className:'card'});
+    ac.appendChild(titleIcon('doc','Acuerdos activos por área',{fontWeight:700,fontSize:14,marginBottom:10}));
+    Object.entries(byAg).sort((a,b)=>b[1]-a[1]).forEach(([cat,n])=>{
+      const r=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',borderBottom:'1px solid var(--bg)'}});
+      r.append(el('span',{style:{fontSize:13}},cat),badge(String(n),'badge-J'));
+      ac.appendChild(r);
+    });
+    wrap.appendChild(ac);
+  }
+
+  const hasAnyStatsContent = entries.some(([,v])=>v.total>0) || topCats.length>0 || Object.keys(byAg).length>0 || getActivityLog().length>0;
+  if(!hasAnyStatsContent) wrap.appendChild(el('div',{style:{textAlign:'center',color:'var(--ink-soft)',padding:'40px 0',fontSize:13}},'Añade gastos o acuerdos para ver las estadísticas'));
+
+  // Activity log
+  const logs=getActivityLog();
+  if(logs.length>0){
+    const lc=el('div',{className:'card',style:{marginTop:14}});
+    lc.appendChild(titleIcon('clock','Historial de actividad',{fontWeight:700,fontSize:14,marginBottom:12}));
+    logs.slice(0,20).forEach(l=>{
+      const r=el('div',{style:{display:'flex',gap:10,padding:'7px 0',borderBottom:'1px solid var(--bg)',alignItems:'start'}});
+      r.append(
+        badge(l.user==='J'?'Jorge':'Eva','badge-'+(l.user==='J'?'J':'E')),
+        el('div',{style:{flex:1}},[
+          el('div',{style:{fontSize:12}},l.action+' '+l.entity+': '+l.detail),
+          el('div',{style:{fontSize:10,color:'var(--ink-soft)',marginTop:2}},new Date(l.ts).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))
+        ])
+      );
+      lc.appendChild(r);
+    });
+    if(logs.length>20) lc.appendChild(el('div',{style:{fontSize:11,color:'var(--ink-soft)',padding:'6px 0'}},'Mostrando 20 de '+logs.length+' entradas'));
+    wrap.appendChild(lc);
+  }
+
+  return wrap;
+}
+
+// ── INTERCAMBIO ───────────────────────────────────────────────────────────────
+function renderIntercambio(){
+  const wrap=el('div',{});
+  if(!S.checklist) S.checklist=loadChecklist();
+
+  // Recordatorios por email
+  const notifCard=el('div',{className:'card',style:{marginBottom:14}});
+  notifCard.appendChild(titleIcon('bell','Recordatorios de cambio',{fontWeight:700,fontSize:14,marginBottom:8}));
+  notifCard.append(
+    titleIcon('check','Activos por email',{fontSize:12,color:'var(--ambos)',marginBottom:6,fontWeight:600}),
+    el('div',{style:{fontSize:11,color:'var(--ink-soft)',lineHeight:1.5}},'Cuando un cambio de custodia real esté a la antelación configurada abajo, se envía un email automático a ambos correos — no depende de tener la app abierta ni de permisos del navegador.')
+  );
+  wrap.appendChild(notifCard);
+
+  // Alert config — siempre visible, conectado a email real
+  const ac=el('div',{className:'card',style:{marginBottom:14}});
+  const ach=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}});
+  ach.append(
+    el('div',{},[
+      titleIcon('gear','Configurar antelación',{fontWeight:700,fontSize:14}),
+      el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginTop:2}},'¿Con cuántos días de antelación quieres el aviso?')
+    ]),
+    el('button',{className:'btn-ghost',style:{fontSize:11},onClick:()=>{UI.showAlertConfig=!UI.showAlertConfig;render();}},UI.showAlertConfig?'Cerrar':'Editar')
+  );
+  ac.appendChild(ach);
+  if(UI.showAlertConfig){
+    const optWrap=el('div',{style:{display:'flex',gap:8}});
+    [1,2,3,7].forEach(d=>{
+      const active=UI.alertDaysBefore===d;
+      optWrap.appendChild(el('button',{
+        style:{flex:1,padding:'10px 4px',borderRadius:9,border:'1px solid',borderColor:active?'var(--jorge)':'var(--line)',background:active?'var(--jorge-soft)':'transparent',color:active?'var(--jorge)':'var(--ink-soft)',fontWeight:active?700:400,fontSize:12},
+        onClick:()=>{saveAlertConfig(d);render();}
+      },d===1?'1 día':d===7?'1 semana':d+' días'));
+    });
+    ac.appendChild(optWrap);
+    ac.appendChild(el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginTop:10}},'Aviso actual: '+(UI.alertDaysBefore===1?'1 día':UI.alertDaysBefore===7?'1 semana':UI.alertDaysBefore+' días')+' antes del cambio, por email a ambos.'));
+  } else {
+    ac.appendChild(el('div',{style:{fontSize:13,color:'var(--ink-soft)'}},'Avisas '+(UI.alertDaysBefore===1?'1 día':UI.alertDaysBefore===7?'1 semana':UI.alertDaysBefore+' días')+' antes de cada cambio, por email a ambos.'));
+  }
+  wrap.appendChild(ac);
+
+  // Next handover info
+  const todayStr=today();
+  const nextEv=[...S.events].filter(ev=>ev.from>=todayStr&&ev.changeStatus!=='rechazado').sort((a,b)=>a.from.localeCompare(b.from))[0];
+  if(nextEv){
+    const nc=el('div',{className:'today-card',style:{marginBottom:14}});
+    nc.append(
+      el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginBottom:6,textTransform:'uppercase',letterSpacing:.5}},'Próximo intercambio'),
+      el('div',{style:{fontWeight:800,fontSize:20,color:CUSTODY_TEXT[nextEv.who],marginBottom:4}},'Con '+nameOf(nextEv.who)),
+      el('div',{style:{fontSize:13,color:'var(--ink-soft)'}},fmt(nextEv.from)+' · '+(daysUntil(nextEv.from)===0?'HOY':daysUntil(nextEv.from)===1?'Mañana':'En '+daysUntil(nextEv.from)+' días'))
+    );
+    wrap.appendChild(nc);
+  }
+
+  // Checklist
+  const cc=el('div',{className:'card'});
+  const ch=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}});
+  const done=S.checklist.filter(i=>i.done).length;
+  ch.append(
+    el('div',{},[
+      titleIcon('check','Checklist de intercambio',{fontWeight:700,fontSize:14}),
+      el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginTop:2}},done+'/'+S.checklist.length+' completados')
+    ]),
+    el('button',{className:'btn-ghost',style:{fontSize:11},onClick:()=>{
+      S.checklist=S.checklist.map(i=>({...i,done:false}));
+      saveChecklist(S.checklist);render();
+    }},'Resetear')
+  );
+  cc.appendChild(ch);
+
+  // Progress bar
+  const prog=el('div',{style:{height:6,background:'var(--paper)',borderRadius:3,overflow:'hidden',marginBottom:14}});
+  prog.appendChild(el('div',{style:{height:'100%',background:'var(--jorge)',width:(S.checklist.length?done/S.checklist.length*100:0)+'%',borderRadius:3,transition:'width .3s'}}));
+  cc.appendChild(prog);
+
+  S.checklist.forEach((item,idx)=>{
+    const r=el('div',{style:{display:'flex',alignItems:'center',gap:10,padding:'9px 0',borderBottom:'1px solid var(--line)'}});
+    const chk=el('button',{
+      style:{width:22,height:22,borderRadius:5,border:'1px solid',borderColor:item.done?'var(--jorge)':'var(--line)',background:item.done?'var(--jorge)':'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:12}
+    });
+    if(item.done){
+      const chkIco=el('span',{style:{width:13,height:13,display:'inline-flex'}});
+      chkIco.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>';
+      chk.appendChild(chkIco);
+    }
+    chk.addEventListener('click',()=>{S.checklist[idx].done=!S.checklist[idx].done;saveChecklist(S.checklist);render();});
+    r.append(chk,el('div',{style:{flex:1,fontSize:13,color:item.done?'var(--ink-soft)':'var(--ink)',textDecoration:item.done?'line-through':'none'}},item.text));
+    // Delete button
+    const delChkBtn=el('button',{style:{background:'none',border:'none',color:'var(--ink-soft)',cursor:'pointer',width:14,height:14,display:'inline-flex'},onClick:()=>{S.checklist.splice(idx,1);saveChecklist(S.checklist);render();}});
+    delChkBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 5l14 14M19 5L5 19"/></svg>';
+    r.appendChild(delChkBtn);
+    cc.appendChild(r);
+  });
+
+  // Add item
+  const addRow=el('div',{style:{display:'flex',gap:8,marginTop:12}});
+  const newInp=el('input',{className:'input',placeholder:'Añadir elemento al checklist…',style:{flex:1}});
+  newInp.value=UI.checklistItem||'';
+  newInp.addEventListener('input',e=>UI.checklistItem=e.target.value);
+  newInp.addEventListener('keydown',e=>{
+    if(e.key==='Enter'&&newInp.value.trim()){
+      S.checklist.push({id:Date.now(),text:newInp.value.trim(),done:false});
+      saveChecklist(S.checklist);UI.checklistItem='';render();
+    }
+  });
+  addRow.append(newInp,el('button',{className:'btn-primary',style:{flexShrink:0,padding:'10px 14px'},onClick:()=>{
+    if(newInp.value.trim()){
+      S.checklist.push({id:Date.now(),text:newInp.value.trim(),done:false});
+      saveChecklist(S.checklist);UI.checklistItem='';render();
+    }
+  }},'+'));
+  cc.appendChild(addRow);
+  wrap.appendChild(cc);
+  return wrap;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+UI.weekOffset = 0;
+UI.loginEmail = ''; UI.loginPass = ''; UI.loginError = '';
+// Timeout fallback: if still loading after 10s, force render
+setTimeout(()=>{
+  const app=document.getElementById('app');
+  if(app && app.textContent.includes('Cargando')){
+    S.checklist = S.checklist||loadChecklist();
+    render();
+    const d=document.createElement('div');
+    d.style.cssText='position:fixed;top:0;left:0;right:0;background:var(--alert-soft);color:var(--alert);padding:8px;font-size:11px;z-index:9999;text-align:center';
+    d.textContent='⚠️ Carga lenta de datos — funcionando en modo limitado';
+    document.body.appendChild(d);
+    setTimeout(()=>d.remove(),5000);
+  }
+},10000);
+
+(async()=>{
+  S.checklist = loadChecklist();
+  // Detect password recovery flow (link from reset email)
+  sb.auth.onAuthStateChange((event, session)=>{
+    if(event==='PASSWORD_RECOVERY' && session && session.user){
+      onAuthenticated(session.user).then(()=>{
+        UI.showPassModal=true; UI.newPass1=''; UI.newPass2='';
+        render();
+      });
+    }
+  });
+  // Check existing session
+  try {
+    const {data:{session}} = await sb.auth.getSession();
+    if(session && session.user){
+      await onAuthenticated(session.user);
+      return;
+    }
+  } catch(e){ console.warn('session check failed:', e); }
+  render(); // shows login
+})();
+</script>
+</body>
+</html>
