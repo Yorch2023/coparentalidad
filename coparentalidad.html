@@ -1362,8 +1362,10 @@ function renderCustodia(){
 
   // Próximos eventos de agenda
   const proximosEventos=[...S.eventosAgenda].filter(e=>(e.fecha||'').slice(0,10)>=today()).sort((a,b)=>(a.fecha||'').slice(0,10).localeCompare((b.fecha||'').slice(0,10))).slice(0,6);
+  const proximosEventosWrap=el('div',{style:{paddingTop:24}});
+  proximosEventosWrap.appendChild(titleIcon('party','Próximos eventos',{fontSize:12,fontWeight:700,color:'var(--ink-soft)',marginBottom:12,textTransform:'uppercase',letterSpacing:.5}));
   if(proximosEventos.length){
-    wrap.appendChild(titleIcon('party','Próximos eventos',{fontSize:12,fontWeight:700,color:'var(--ink-soft)',marginTop:32,marginBottom:12,textTransform:'uppercase',letterSpacing:.5}));
+    wrap.appendChild(proximosEventosWrap);
     proximosEventos.forEach(ev=>{
       const tipoInfo=EVENTO_TIPOS.find(t=>t.id===ev.tipo)||EVENTO_TIPOS[EVENTO_TIPOS.length-1];
       const r=el('div',{className:'card',style:{marginBottom:10,padding:'14px',display:'flex',alignItems:'center',gap:12,borderLeft:'3px solid '+tipoInfo.color}});
@@ -1387,7 +1389,9 @@ function renderCustodia(){
   // Upcoming events
   const upcoming=[...S.events].filter(ev=>ev.to>=today()&&ev.changeStatus!=='rechazado').sort((a,b)=>a.from.localeCompare(b.from)).slice(0,8);
   if(upcoming.length){
-    wrap.appendChild(el('div',{style:{fontSize:12,fontWeight:700,color:'var(--ink-soft)',marginTop:32,marginBottom:12,textTransform:'uppercase',letterSpacing:.5}},'Próximos periodos'));
+    const proximosPeriodosWrap=el('div',{style:{paddingTop:24}});
+    proximosPeriodosWrap.appendChild(el('div',{style:{fontSize:12,fontWeight:700,color:'var(--ink-soft)',marginBottom:12,textTransform:'uppercase',letterSpacing:.5}},'Próximos periodos'));
+    wrap.appendChild(proximosPeriodosWrap);
     upcoming.forEach(ev=>{
       const r=el('div',{className:'card',style:{marginBottom:8,cursor:'pointer',borderLeft:'3px solid '+(ev.changeStatus==='pendiente'?'var(--ink-soft)':CUSTODY_TEXT[ev.who]),padding:'12px 14px'},onClick:()=>{UI.calSelected=ev;render();}});
       const t=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center'}});
@@ -1465,6 +1469,7 @@ function renderCalMonth(){
   // Mapa de custodia por día
   const dayMap={};
   const wedMap={};
+  const ambosDays={}; // días donde dos eventos distintos (con 'who' diferente) se solapan
   for(const ev of S.events){
     if(ev.changeStatus==='rechazado') continue;
     if(ev.note==='Miércoles fijo' && ev.from===ev.to){ wedMap[ev.from]=ev; continue; }
@@ -1475,7 +1480,12 @@ function renderCalMonth(){
     let guard=0;
     while(d<=end && guard<400){ // límite de seguridad: nunca más de ~400 días por evento
       const k=d.toISOString().slice(0,10);
-      if(!wedMap[k]) dayMap[k]=ev;
+      if(!wedMap[k]){
+        if(dayMap[k] && dayMap[k].who!==ev.who && dayMap[k].id!==ev.id){
+          ambosDays[k]=true; // dos progenitores distintos cubren el mismo día: día de cambio compartido
+        }
+        dayMap[k]=ev;
+      }
       d.setDate(d.getDate()+1);
       guard++;
     }
@@ -1513,8 +1523,11 @@ function renderCalMonth(){
     const isLectivo=isDiaLectivoEspecial(key);
     const agendaHoy=agendaMap[key]||[];
 
+    const isAmbos=!!ambosDays[key];
+
     let bgColor='transparent', textColor='var(--ink-soft)', borderStyle='none', clickEv=null;
     if(wedEv){ bgColor='var(--alert-soft)'; textColor='var(--alert)'; borderStyle='1px dashed var(--alert)'; clickEv=wedEv; }
+    else if(isAmbos && ev && !isPend){ bgColor=CUSTODY_BG.ambos; textColor=CUSTODY_TEXT.ambos; clickEv=ev; }
     else if(ev && !isPend){ bgColor=CUSTODY_BG[ev.who]; textColor=CUSTODY_TEXT[ev.who]; clickEv=ev; }
     else if(isPend){ borderStyle='1px dashed var(--ink-soft)'; clickEv=ev; }
 
@@ -1632,6 +1645,7 @@ function renderCalWeek(){
   );
 
   const dayMap={};
+  const ambosDays={};
   for(const ev of S.events){
     if(ev.changeStatus==='rechazado') continue;
     const start=new Date(ev.from+'T12:00:00');
@@ -1640,7 +1654,11 @@ function renderCalWeek(){
     let d=new Date(start);
     let guard=0;
     while(d<=end && guard<400){
-      dayMap[d.toISOString().slice(0,10)]=ev;
+      const k=d.toISOString().slice(0,10);
+      if(dayMap[k] && dayMap[k].who!==ev.who && dayMap[k].id!==ev.id){
+        ambosDays[k]=true;
+      }
+      dayMap[k]=ev;
       d.setDate(d.getDate()+1);
       guard++;
     }
@@ -1662,6 +1680,7 @@ function renderCalWeek(){
     const d=new Date(ref); d.setDate(d.getDate()+i);
     const key=d.toISOString().slice(0,10);
     const ev=dayMap[key];
+    const isAmbos=!!ambosDays[key];
     const isTdy=(key===todayStr);
     const isFestD=isFestivo(key);
     const festNm=festivoName(key);
@@ -1675,7 +1694,7 @@ function renderCalWeek(){
 
     const cell=document.createElement('div');
     cell.className='week-cell';
-    cell.style.background=ev?CUSTODY_BG[ev.who]:'var(--paper)';
+    cell.style.background=ev?(isAmbos?CUSTODY_BG.ambos:CUSTODY_BG[ev.who]):'var(--paper)';
     cell.style.border=isTdy?'1px solid var(--jorge)':(isFestD?'1px solid var(--accent)':'1px solid var(--line)');
     cell.style.position='relative';
     cell.style.cursor=(ev||isFestD||agendaHoy.length)?'pointer':'default';
@@ -1691,13 +1710,13 @@ function renderCalWeek(){
 
     const numDiv=document.createElement('div');
     numDiv.style.fontSize='15px'; numDiv.style.fontWeight=isTdy?'800':'600';
-    numDiv.style.color=ev?CUSTODY_TEXT[ev.who]:(isFestD?'var(--accent)':'var(--ink-soft)');
+    numDiv.style.color=ev?(isAmbos?CUSTODY_TEXT.ambos:CUSTODY_TEXT[ev.who]):(isFestD?'var(--accent)':'var(--ink-soft)');
     numDiv.textContent=String(d.getDate());
     cell.appendChild(numDiv);
 
     const whoDiv=document.createElement('div');
     whoDiv.style.fontSize='10px';
-    if(ev){ whoDiv.style.color=CUSTODY_TEXT[ev.who]; whoDiv.style.fontWeight='700'; whoDiv.textContent=nameOf(ev.who); }
+    if(ev){ whoDiv.style.color=isAmbos?CUSTODY_TEXT.ambos:CUSTODY_TEXT[ev.who]; whoDiv.style.fontWeight='700'; whoDiv.textContent=isAmbos?'Ambos':nameOf(ev.who); }
     else { whoDiv.style.color='var(--ink-soft)'; whoDiv.textContent='—'; }
     cell.appendChild(whoDiv);
 
@@ -1951,7 +1970,9 @@ function renderSolicitudesList(){
   const resueltas=S.solicitudes.filter(s=>s.estado!=='pendiente').slice(0,5);
 
   if(pendientes.length){
-    wrap.appendChild(titleIcon('clipboard','Solicitudes pendientes ('+pendientes.length+')',{fontSize:12,fontWeight:700,color:'var(--eva)',marginTop:32,marginBottom:12,textTransform:'uppercase',letterSpacing:.5}));
+    const solicitudesTitleWrap=el('div',{style:{paddingTop:24}});
+    solicitudesTitleWrap.appendChild(titleIcon('clipboard','Solicitudes pendientes ('+pendientes.length+')',{fontSize:12,fontWeight:700,color:'var(--eva)',marginBottom:12,textTransform:'uppercase',letterSpacing:.5}));
+    wrap.appendChild(solicitudesTitleWrap);
     pendientes.forEach(s=>{
       const tipoInfo=SOLICITUD_TIPOS.find(t=>t.id===s.tipo);
       const mia = s.from_user===S.user.role;
@@ -2486,7 +2507,9 @@ function renderAcuerdos(){
       wrap.appendChild(form);
     }
     if(archived.length){
-      wrap.appendChild(el('div',{style:{fontSize:12,fontWeight:700,color:'var(--ink-soft)',marginTop:28,marginBottom:12,textTransform:'uppercase',letterSpacing:.5}},'Archivados ('+(archived.length)+')'));
+      const archivadosTitleWrap=el('div',{style:{paddingTop:20}});
+      archivadosTitleWrap.appendChild(el('div',{style:{fontSize:12,fontWeight:700,color:'var(--ink-soft)',marginBottom:12,textTransform:'uppercase',letterSpacing:.5}},'Archivados ('+(archived.length)+')'));
+      wrap.appendChild(archivadosTitleWrap);
       archived.forEach(a=>{
         const r=el('div',{className:'card',style:{marginBottom:8,opacity:.5,padding:'10px 14px'}});
         const t=el('div',{style:{display:'flex',justifyContent:'space-between'}});
