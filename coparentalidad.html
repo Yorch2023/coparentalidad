@@ -1349,7 +1349,7 @@ function renderCustodia(){
   if(UI.showWeekGen) wrap.appendChild(renderWeekGenForm());
 
   // Añadir evento a la agenda — informativo, sin aprobación
-  const btnAgenda=el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:22,fontSize:12,background:'var(--ambos-soft)',color:'var(--ambos)',borderColor:'var(--ambos)',display:'flex',alignItems:'center',justifyContent:'center',gap:8,padding:'13px 14px',textAlign:'center'},onClick:()=>{UI.showEventoForm=!UI.showEventoForm;UI.showSolicitudForm=false;UI.showWeekGen=false;render();}});
+  const btnAgenda=el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:8,fontSize:12,background:'var(--ambos-soft)',color:'var(--ambos)',borderColor:'var(--ambos)',display:'flex',alignItems:'center',justifyContent:'center',gap:8,padding:'13px 14px',textAlign:'center'},onClick:()=>{UI.showEventoForm=!UI.showEventoForm;UI.showSolicitudForm=false;UI.showWeekGen=false;render();}});
   if(!UI.showEventoForm){
     const icoA=el('span',{style:{display:'inline-flex',width:15,height:15}});
     icoA.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z"/></svg>';
@@ -1363,7 +1363,7 @@ function renderCustodia(){
   // Próximos eventos de agenda
   const proximosEventos=[...S.eventosAgenda].filter(e=>(e.fecha||'').slice(0,10)>=today()).sort((a,b)=>(a.fecha||'').slice(0,10).localeCompare((b.fecha||'').slice(0,10))).slice(0,6);
   if(proximosEventos.length){
-    wrap.appendChild(titleIcon('party','Próximos eventos',{fontSize:11,fontWeight:700,color:'var(--ink-soft)',marginTop:6,marginBottom:10,textTransform:'uppercase',letterSpacing:.5}));
+    wrap.appendChild(titleIcon('party','Próximos eventos',{fontSize:12,fontWeight:700,color:'var(--ink-soft)',marginTop:32,marginBottom:12,textTransform:'uppercase',letterSpacing:.5}));
     proximosEventos.forEach(ev=>{
       const tipoInfo=EVENTO_TIPOS.find(t=>t.id===ev.tipo)||EVENTO_TIPOS[EVENTO_TIPOS.length-1];
       const r=el('div',{className:'card',style:{marginBottom:10,padding:'14px',display:'flex',alignItems:'center',gap:12,borderLeft:'3px solid '+tipoInfo.color}});
@@ -1387,7 +1387,7 @@ function renderCustodia(){
   // Upcoming events
   const upcoming=[...S.events].filter(ev=>ev.to>=today()&&ev.changeStatus!=='rechazado').sort((a,b)=>a.from.localeCompare(b.from)).slice(0,8);
   if(upcoming.length){
-    wrap.appendChild(el('div',{style:{fontSize:11,fontWeight:700,color:'var(--ink-soft)',marginTop:18,marginBottom:10,textTransform:'uppercase',letterSpacing:.5}},'Próximos periodos'));
+    wrap.appendChild(el('div',{style:{fontSize:12,fontWeight:700,color:'var(--ink-soft)',marginTop:32,marginBottom:12,textTransform:'uppercase',letterSpacing:.5}},'Próximos periodos'));
     upcoming.forEach(ev=>{
       const r=el('div',{className:'card',style:{marginBottom:8,cursor:'pointer',borderLeft:'3px solid '+(ev.changeStatus==='pendiente'?'var(--ink-soft)':CUSTODY_TEXT[ev.who]),padding:'12px 14px'},onClick:()=>{UI.calSelected=ev;render();}});
       const t=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center'}});
@@ -1951,7 +1951,7 @@ function renderSolicitudesList(){
   const resueltas=S.solicitudes.filter(s=>s.estado!=='pendiente').slice(0,5);
 
   if(pendientes.length){
-    wrap.appendChild(titleIcon('clipboard','Solicitudes pendientes ('+pendientes.length+')',{fontSize:11,fontWeight:700,color:'var(--eva)',marginTop:18,marginBottom:8,textTransform:'uppercase',letterSpacing:.5}));
+    wrap.appendChild(titleIcon('clipboard','Solicitudes pendientes ('+pendientes.length+')',{fontSize:12,fontWeight:700,color:'var(--eva)',marginTop:32,marginBottom:12,textTransform:'uppercase',letterSpacing:.5}));
     pendientes.forEach(s=>{
       const tipoInfo=SOLICITUD_TIPOS.find(t=>t.id===s.tipo);
       const mia = s.from_user===S.user.role;
@@ -2393,7 +2393,7 @@ function renderAcuerdos(){
     const active=agreements.filter(a=>a.status==='activo');
     const archived=agreements.filter(a=>a.status==='archivado');
     if(pendientesAg.length){
-      wrap.appendChild(titleIcon('clipboard','Pendientes de confirmar ('+pendientesAg.length+')',{fontSize:11,fontWeight:700,color:'var(--eva)',marginTop:18,marginBottom:8,textTransform:'uppercase',letterSpacing:.5}));
+      wrap.appendChild(titleIcon('clipboard','Pendientes de confirmar ('+pendientesAg.length+')',{fontSize:12,fontWeight:700,color:'var(--eva)',marginTop:8,marginBottom:12,textTransform:'uppercase',letterSpacing:.5}));
       pendientesAg.forEach(a=>{
         const mia=a.created_by===S.user.role;
         const c=CAT_COLORS[a.category]||'var(--ink-soft)';
@@ -2486,7 +2486,7 @@ function renderAcuerdos(){
       wrap.appendChild(form);
     }
     if(archived.length){
-      wrap.appendChild(el('div',{style:{fontSize:11,fontWeight:700,color:'var(--ink-soft)',marginTop:16,marginBottom:8,textTransform:'uppercase',letterSpacing:.5}},'Archivados ('+(archived.length)+')'));
+      wrap.appendChild(el('div',{style:{fontSize:12,fontWeight:700,color:'var(--ink-soft)',marginTop:28,marginBottom:12,textTransform:'uppercase',letterSpacing:.5}},'Archivados ('+(archived.length)+')'));
       archived.forEach(a=>{
         const r=el('div',{className:'card',style:{marginBottom:8,opacity:.5,padding:'10px 14px'}});
         const t=el('div',{style:{display:'flex',justifyContent:'space-between'}});
