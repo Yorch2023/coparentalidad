@@ -57,11 +57,11 @@
     .card-dark{background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px}
 
     /* Buttons */
-    .btn-primary{background:var(--ink);color:var(--paper);border:none;border-radius:12px;padding:10px 18px;font-weight:600;font-size:13px;transition:opacity .15s}
+    .btn-primary{background:var(--ink);color:var(--paper);border:none;border-radius:12px;padding:10px 18px;font-weight:600;font-size:13px;line-height:1.4;transition:opacity .15s}
     .btn-primary:hover{opacity:.88}
     .btn-primary-full{display:block;width:100%;text-align:center;background:var(--jorge);color:var(--paper);border:none;border-radius:14px;padding:15px;font-weight:700;font-size:15px}
     .btn-outline-full{display:block;width:100%;text-align:center;background:transparent;color:var(--ink-soft);border:1px solid var(--line);border-radius:14px;padding:13px;font-weight:600;font-size:14.5px;margin-bottom:10px}
-    .btn-ghost{background:var(--paper);color:var(--ink-soft);border:1px solid var(--line);border-radius:11px;padding:8px 14px;font-size:12px}
+    .btn-ghost{background:var(--paper);color:var(--ink-soft);border:1px solid var(--line);border-radius:11px;padding:8px 14px;font-size:12px;line-height:1.4}
     .btn-danger{background:var(--alert-soft);color:var(--alert);border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600}
     .btn-success{background:var(--ambos-soft);color:var(--ambos);border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600}
     .btn-sm{background:var(--paper);border:1px solid var(--line);color:var(--ink-soft);border-radius:9px;padding:6px 12px;font-size:14px}
@@ -1318,7 +1318,7 @@ function renderCustodia(){
 
   // Solicitar cambio — única vía para crear, mover o cancelar un periodo
   const btnSolicitar=el('button',{
-    className:'btn-primary',style:{width:'100%',marginBottom:8,padding:13,background:'var(--jorge)',display:'flex',alignItems:'center',justifyContent:'center',gap:8},
+    className:'btn-primary',style:{width:'100%',marginBottom:10,padding:'15px 14px',background:'var(--jorge)',display:'flex',alignItems:'center',justifyContent:'center',gap:8,textAlign:'center'},
     onClick:()=>{UI.showSolicitudForm=!UI.showSolicitudForm;UI.solicitudTipo=null;UI.showWeekGen=false;UI.showEventoForm=false;render();}
   });
   if(!UI.showSolicitudForm){
@@ -1335,7 +1335,7 @@ function renderCustodia(){
   if(S.solicitudes.length>0) wrap.appendChild(renderSolicitudesList());
 
   // Generador de turnos base (solo para precargar el calendario, no para cambios puntuales)
-  const btnTurnos=el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:8,fontSize:12,textAlign:'left',display:'flex',flexDirection:'column',alignItems:'flex-start',gap:2,padding:'10px 14px'},onClick:()=>{UI.showWeekGen=!UI.showWeekGen;UI.showSolicitudForm=false;UI.showEventoForm=false;render();}});
+  const btnTurnos=el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:10,fontSize:12,textAlign:'left',display:'flex',flexDirection:'column',alignItems:'flex-start',gap:5,padding:'13px 14px'},onClick:()=>{UI.showWeekGen=!UI.showWeekGen;UI.showSolicitudForm=false;UI.showEventoForm=false;render();}});
   if(!UI.showWeekGen){
     const rowT=el('div',{style:{display:'flex',alignItems:'center',gap:8}});
     const icoT=el('span',{style:{display:'inline-flex',width:15,height:15}});
@@ -1349,7 +1349,7 @@ function renderCustodia(){
   if(UI.showWeekGen) wrap.appendChild(renderWeekGenForm());
 
   // Añadir evento a la agenda — informativo, sin aprobación
-  const btnAgenda=el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:22,fontSize:12,background:'var(--ambos-soft)',color:'var(--ambos)',borderColor:'var(--ambos)',display:'flex',alignItems:'center',justifyContent:'center',gap:8},onClick:()=>{UI.showEventoForm=!UI.showEventoForm;UI.showSolicitudForm=false;UI.showWeekGen=false;render();}});
+  const btnAgenda=el('button',{className:'btn-ghost',style:{width:'100%',marginBottom:22,fontSize:12,background:'var(--ambos-soft)',color:'var(--ambos)',borderColor:'var(--ambos)',display:'flex',alignItems:'center',justifyContent:'center',gap:8,padding:'13px 14px',textAlign:'center'},onClick:()=>{UI.showEventoForm=!UI.showEventoForm;UI.showSolicitudForm=false;UI.showWeekGen=false;render();}});
   if(!UI.showEventoForm){
     const icoA=el('span',{style:{display:'inline-flex',width:15,height:15}});
     icoA.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z"/></svg>';
@@ -1363,10 +1363,10 @@ function renderCustodia(){
   // Próximos eventos de agenda
   const proximosEventos=[...S.eventosAgenda].filter(e=>(e.fecha||'').slice(0,10)>=today()).sort((a,b)=>(a.fecha||'').slice(0,10).localeCompare((b.fecha||'').slice(0,10))).slice(0,6);
   if(proximosEventos.length){
-    wrap.appendChild(titleIcon('party','Próximos eventos',{fontSize:11,fontWeight:700,color:'var(--ink-soft)',marginBottom:8,textTransform:'uppercase',letterSpacing:.5}));
+    wrap.appendChild(titleIcon('party','Próximos eventos',{fontSize:11,fontWeight:700,color:'var(--ink-soft)',marginTop:6,marginBottom:10,textTransform:'uppercase',letterSpacing:.5}));
     proximosEventos.forEach(ev=>{
       const tipoInfo=EVENTO_TIPOS.find(t=>t.id===ev.tipo)||EVENTO_TIPOS[EVENTO_TIPOS.length-1];
-      const r=el('div',{className:'card',style:{marginBottom:8,padding:'12px 14px',display:'flex',alignItems:'center',gap:12,borderLeft:'3px solid '+tipoInfo.color}});
+      const r=el('div',{className:'card',style:{marginBottom:10,padding:'14px',display:'flex',alignItems:'center',gap:12,borderLeft:'3px solid '+tipoInfo.color}});
       const iconBox=el('div',{style:{width:34,height:34,borderRadius:10,background:tipoInfo.color+'22',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,color:tipoInfo.color}});
       const iconInner=el('span',{style:{width:17,height:17,display:'inline-flex'}});
       iconInner.innerHTML=ICONS[tipoInfo.iconKey]||'';
@@ -1387,7 +1387,7 @@ function renderCustodia(){
   // Upcoming events
   const upcoming=[...S.events].filter(ev=>ev.to>=today()&&ev.changeStatus!=='rechazado').sort((a,b)=>a.from.localeCompare(b.from)).slice(0,8);
   if(upcoming.length){
-    wrap.appendChild(el('div',{style:{fontSize:11,fontWeight:700,color:'var(--ink-soft)',marginBottom:8,textTransform:'uppercase',letterSpacing:.5}},'Próximos periodos'));
+    wrap.appendChild(el('div',{style:{fontSize:11,fontWeight:700,color:'var(--ink-soft)',marginTop:18,marginBottom:10,textTransform:'uppercase',letterSpacing:.5}},'Próximos periodos'));
     upcoming.forEach(ev=>{
       const r=el('div',{className:'card',style:{marginBottom:8,cursor:'pointer',borderLeft:'3px solid '+(ev.changeStatus==='pendiente'?'var(--ink-soft)':CUSTODY_TEXT[ev.who]),padding:'12px 14px'},onClick:()=>{UI.calSelected=ev;render();}});
       const t=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center'}});
@@ -1955,11 +1955,11 @@ function renderSolicitudesList(){
     pendientes.forEach(s=>{
       const tipoInfo=SOLICITUD_TIPOS.find(t=>t.id===s.tipo);
       const mia = s.from_user===S.user.role;
-      const card=el('div',{className:'card',style:{marginBottom:8,borderLeft:'3px solid var(--eva)',padding:'12px 14px'}});
-      card.appendChild(el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'start',marginBottom:6}},[
+      const card=el('div',{className:'card',style:{marginBottom:10,borderLeft:'3px solid var(--eva)',padding:'14px'}});
+      card.appendChild(el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'start',marginBottom:8}},[
         el('div',{},[
-          tipoInfo?titleIcon(tipoInfo.iconKey,(s.tipo_label||s.tipo),{fontSize:13,fontWeight:700}):el('div',{style:{fontSize:13,fontWeight:700}},s.tipo_label||s.tipo),
-          el('div',{style:{fontSize:11,color:'var(--ink-soft)',marginTop:2}},fmt(s.from_date)+(s.to_date&&s.to_date!==s.from_date?' → '+fmt(s.to_date):'')+' · Pide '+nameOf(s.from_user))
+          tipoInfo?titleIcon(tipoInfo.iconKey,(s.tipo_label||s.tipo),{fontSize:13,fontWeight:700,marginBottom:4}):el('div',{style:{fontSize:13,fontWeight:700,marginBottom:4}},s.tipo_label||s.tipo),
+          el('div',{style:{fontSize:11,color:'var(--ink-soft)'}},fmt(s.from_date)+(s.to_date&&s.to_date!==s.from_date?' → '+fmt(s.to_date):'')+' · Pide '+nameOf(s.from_user))
         ]),
         badge('Pendiente','badge-warn')
       ]));
@@ -1990,7 +1990,7 @@ function renderSolicitudesList(){
   }
 
   if(resueltas.length){
-    wrap.appendChild(el('div',{style:{fontSize:11,fontWeight:700,color:'var(--ink-soft)',marginBottom:8,marginTop:pendientes.length?14:0,textTransform:'uppercase',letterSpacing:.5}},'Resueltas recientemente'));
+    wrap.appendChild(el('div',{style:{fontSize:11,fontWeight:700,color:'var(--ink-soft)',marginBottom:10,marginTop:pendientes.length?20:0,textTransform:'uppercase',letterSpacing:.5}},'Resueltas recientemente'));
     resueltas.forEach(s=>{
       const tipoInfo=SOLICITUD_TIPOS.find(t=>t.id===s.tipo);
       const esRechazo = s.estado!=='aprobada';
