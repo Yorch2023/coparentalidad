@@ -1413,61 +1413,82 @@ function renderCalMonth(){
     el('button',{className:'btn-sm',onClick:()=>{if(UI.calMonth===11){UI.calMonth=0;UI.calYear++;}else UI.calMonth++;render();}},'→')
   );
 
-  // Legend — cada muestra reproduce exactamente cómo se ve en el calendario
+  // Leyenda — reconstruida desde cero
   const leg=el('div',{style:{display:'flex',gap:'8px 16px',marginBottom:14,flexWrap:'wrap',alignItems:'center'}});
-  [
-    {label:'Jorge', color:'var(--jorge)'},
-    {label:'Eva', color:'var(--eva)'},
-    {label:'Ambos', color:'var(--ambos)'},
-  ].forEach(item=>{
-    const d=el('div',{style:{display:'flex',alignItems:'center',gap:7,flexShrink:0}});
-    d.append(
-      el('div',{style:{width:16,height:16,borderRadius:5,background:item.color,flexShrink:0}}),
-      el('span',{style:{fontSize:12,color:'var(--ink-soft)',whiteSpace:'nowrap'}},item.label)
-    );
-    leg.appendChild(d);
-  });
-  // Miércoles: reproduce el borde punteado real
-  const wedSample=el('div',{style:{display:'flex',alignItems:'center',gap:6,flexShrink:0}});
-  wedSample.append(
-    el('div',{style:{width:20,height:20,borderRadius:6,background:'var(--alert-soft)',border:'1.5px dashed var(--alert)',flexShrink:0}}),
-    el('span',{style:{fontSize:12,color:'var(--ink-soft)',whiteSpace:'nowrap'}},'Miércoles')
-  );
-  leg.appendChild(wedSample);
-  // Festivo: reproduce el icono de bandera real
-  const festSample=el('div',{style:{display:'flex',alignItems:'center',gap:6,flexShrink:0}});
-  const festIcoSample=el('span',{style:{width:20,height:20,borderRadius:6,background:'var(--accent)',color:'var(--paper)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}});
-  const festIcoInner=el('span',{style:{width:11,height:11,display:'inline-flex'}});
-  festIcoInner.innerHTML=ICONS.flag||'';
-  festIcoSample.appendChild(festIcoInner);
-  festSample.append(festIcoSample, el('span',{style:{fontSize:12,color:'var(--ink-soft)',whiteSpace:'nowrap'}},'Festivo'));
-  leg.appendChild(festSample);
+  const legendItems=[
+    {label:'Jorge', bg:'var(--jorge)'},
+    {label:'Eva', bg:'var(--eva)'},
+    {label:'Ambos', bg:'var(--ambos)'},
+  ];
+  for(let i=0;i<legendItems.length;i++){
+    const item=legendItems[i];
+    const row=document.createElement('div');
+    row.style.display='flex';
+    row.style.alignItems='center';
+    row.style.gap='7px';
+    const swatch=document.createElement('div');
+    swatch.style.width='16px';
+    swatch.style.height='16px';
+    swatch.style.borderRadius='5px';
+    swatch.style.background=item.bg;
+    swatch.style.flexShrink='0';
+    const txt=document.createElement('span');
+    txt.style.fontSize='12px';
+    txt.style.color='var(--ink-soft)';
+    txt.style.whiteSpace='nowrap';
+    txt.textContent=item.label;
+    row.appendChild(swatch);
+    row.appendChild(txt);
+    leg.appendChild(row);
+  }
+  // Miércoles
+  const wedRow=document.createElement('div');
+  wedRow.style.display='flex'; wedRow.style.alignItems='center'; wedRow.style.gap='6px';
+  const wedSwatch=document.createElement('div');
+  wedSwatch.style.width='20px'; wedSwatch.style.height='20px'; wedSwatch.style.borderRadius='6px';
+  wedSwatch.style.background='var(--alert-soft)'; wedSwatch.style.border='1.5px dashed var(--alert)';
+  const wedTxt=document.createElement('span');
+  wedTxt.style.fontSize='12px'; wedTxt.style.color='var(--ink-soft)'; wedTxt.textContent='Miércoles';
+  wedRow.appendChild(wedSwatch); wedRow.appendChild(wedTxt);
+  leg.appendChild(wedRow);
+  // Festivo
+  const festRow=document.createElement('div');
+  festRow.style.display='flex'; festRow.style.alignItems='center'; festRow.style.gap='6px';
+  const festSwatch=document.createElement('div');
+  festSwatch.style.width='20px'; festSwatch.style.height='20px'; festSwatch.style.borderRadius='50%';
+  festSwatch.style.background='var(--accent)';
+  const festTxt=document.createElement('span');
+  festTxt.style.fontSize='12px'; festTxt.style.color='var(--ink-soft)'; festTxt.textContent='Festivo';
+  festRow.appendChild(festSwatch); festRow.appendChild(festTxt);
+  leg.appendChild(festRow);
 
-  // Build day map — miércoles fijo gets special treatment
+  // Mapa de custodia por día
   const dayMap={};
   const wedMap={};
-  S.events.forEach(ev=>{
-    if(ev.changeStatus==='rechazado') return;
-    if(ev.note==='Miércoles fijo'&&ev.from===ev.to){
-      wedMap[ev.from]=ev; return;
-    }
-    let d=new Date(ev.from+'T12:00:00'),end=new Date(ev.to+'T12:00:00');
-    while(d<=end){
+  for(const ev of S.events){
+    if(ev.changeStatus==='rechazado') continue;
+    if(ev.note==='Miércoles fijo' && ev.from===ev.to){ wedMap[ev.from]=ev; continue; }
+    const start=new Date(ev.from+'T12:00:00');
+    const end=new Date(ev.to+'T12:00:00');
+    if(isNaN(start.getTime())||isNaN(end.getTime())||start>end) continue; // datos corruptos: se ignoran, no bloquean el render
+    let d=new Date(start);
+    let guard=0;
+    while(d<=end && guard<400){ // límite de seguridad: nunca más de ~400 días por evento
       const k=d.toISOString().slice(0,10);
       if(!wedMap[k]) dayMap[k]=ev;
       d.setDate(d.getDate()+1);
+      guard++;
     }
-  });
+  }
 
-  // Eventos de agenda por día (informativos, no forman parte de la custodia)
-  // Normalizamos la fecha a YYYY-MM-DD por si llega con hora incluida desde Supabase
-  const eventoMap={};
-  S.eventosAgenda.forEach(e=>{
-    const fk=(e.fecha||'').slice(0,10);
-    if(!fk) return;
-    if(!eventoMap[fk]) eventoMap[fk]=[];
-    eventoMap[fk].push(e);
-  });
+  // Mapa de eventos de agenda por día — reconstruido, clave normalizada a YYYY-MM-DD
+  const agendaMap={};
+  for(const e of S.eventosAgenda){
+    const fecha=String(e.fecha||'').slice(0,10);
+    if(!fecha) continue;
+    if(!agendaMap[fecha]) agendaMap[fecha]=[];
+    agendaMap[fecha].push(e);
+  }
 
   const cal=el('div',{className:'card-dark',style:{padding:10,marginBottom:14}});
   const calHdr=el('div',{className:'cal-grid',style:{marginBottom:4}});
@@ -1478,59 +1499,120 @@ function renderCalMonth(){
   const dim=new Date(UI.calYear,UI.calMonth+1,0).getDate();
   const offset=(firstDay+6)%7;
   const grid=el('div',{className:'cal-grid'});
+  const todayStr=today();
 
   for(let i=0;i<offset;i++) grid.appendChild(el('div',{}));
+
   for(let n=1;n<=dim;n++){
-    const key=String(UI.calYear)+'-'+String(UI.calMonth+1).padStart(2,'0')+'-'+String(n).padStart(2,'0');
+    const key=UI.calYear+'-'+String(UI.calMonth+1).padStart(2,'0')+'-'+String(n).padStart(2,'0');
     const ev=dayMap[key];
     const wedEv=wedMap[key];
-    const isTdy=key===today();
-    const isPend=ev&&ev.changeStatus==='pendiente';
+    const isTdy=(key===todayStr);
+    const isPend=!!(ev && ev.changeStatus==='pendiente');
+    const isFest=isFestivo(key);
+    const isLectivo=isDiaLectivoEspecial(key);
+    const agendaHoy=agendaMap[key]||[];
 
     let bgColor='transparent', textColor='var(--ink-soft)', borderStyle='none', clickEv=null;
-    if(wedEv){
-      bgColor='var(--alert-soft)'; textColor='var(--alert)'; borderStyle='1px dashed var(--alert)'; clickEv=wedEv;
-    } else if(ev&&!isPend){
-      bgColor=CUSTODY_BG[ev.who]; textColor=CUSTODY_TEXT[ev.who]; clickEv=ev;
-    } else if(isPend){
-      borderStyle='1px dashed var(--ink-soft)'; clickEv=ev;
-    }
+    if(wedEv){ bgColor='var(--alert-soft)'; textColor='var(--alert)'; borderStyle='1px dashed var(--alert)'; clickEv=wedEv; }
+    else if(ev && !isPend){ bgColor=CUSTODY_BG[ev.who]; textColor=CUSTODY_TEXT[ev.who]; clickEv=ev; }
+    else if(isPend){ borderStyle='1px dashed var(--ink-soft)'; clickEv=ev; }
 
-    const isFest = isFestivo(key);
-    const isLectivo = isDiaLectivoEspecial(key);
-    const eventosDia = eventoMap[key]||[];
     const titleParts=[];
     if(isFest) titleParts.push(festivoName(key));
     if(isLectivo) titleParts.push(diaLectivoNombre(key));
-    if(eventosDia.length) titleParts.push(eventosDia.map(e=>e.titulo).join(', '));
-    const cell=el('div',{
-      className:'cal-cell'+(ev||wedEv?' has-event':''),
-      style:{background:bgColor,position:'relative'},
-      title:titleParts.join(' · '),
-      onClick:()=>{if(clickEv){UI.calSelected=clickEv;render();} else if(isFest){ alert('🎉 '+festivoName(key)); } else if(eventosDia.length){ UI.calSelectedEventos=eventosDia; render(); } else if(isLectivo){ alert('🏫 '+diaLectivoNombre(key)); }}
+    if(agendaHoy.length) titleParts.push(agendaHoy.map(e=>e.titulo).join(', '));
+
+    const cell=document.createElement('div');
+    cell.className='cal-cell'+((ev||wedEv)?' has-event':'');
+    cell.style.background=bgColor;
+    cell.style.position='relative';
+    if(titleParts.length) cell.title=titleParts.join(' · ');
+    cell.addEventListener('click',()=>{
+      if(clickEv){ UI.calSelected=clickEv; render(); }
+      else if(isFest){ alert('🎉 '+festivoName(key)); }
+      else if(agendaHoy.length){ UI.calSelectedEventos=agendaHoy; render(); }
+      else if(isLectivo){ alert('🏫 '+diaLectivoNombre(key)); }
     });
-    cell.appendChild(el('div',{
-      className:'cal-num'+(isTdy?' today':''),
-      style:{color:isTdy?'':isFest&&!ev&&!wedEv?'var(--accent)':textColor, border:isTdy?'none':borderStyle}
-    },String(n)));
+
+    const numDiv=document.createElement('div');
+    numDiv.className='cal-num'+(isTdy?' today':'');
+    numDiv.style.color=isTdy?'':(isFest && !ev && !wedEv?'var(--accent)':textColor);
+    numDiv.style.border=isTdy?'none':borderStyle;
+    numDiv.textContent=String(n);
+    cell.appendChild(numDiv);
+
+    // Badge de festivo — esquina inferior izquierda
     if(isFest){
-      const festIco=el('span',{style:{position:'absolute',bottom:1,left:2,width:11,height:11,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'var(--paper)',background:'var(--accent)',borderRadius:'50%',padding:1.5,boxSizing:'border-box'}});
-      festIco.innerHTML=ICONS.flag||'';
-      cell.appendChild(festIco);
+      const badge=document.createElement('div');
+      badge.style.position='absolute';
+      badge.style.bottom='2px';
+      badge.style.left='2px';
+      badge.style.width='12px';
+      badge.style.height='12px';
+      badge.style.borderRadius='50%';
+      badge.style.background='var(--accent)';
+      badge.style.display='flex';
+      badge.style.alignItems='center';
+      badge.style.justifyContent='center';
+      const svgWrap=document.createElement('div');
+      svgWrap.style.width='8px';
+      svgWrap.style.height='8px';
+      svgWrap.style.color='#fff';
+      svgWrap.innerHTML=ICONS.flag||'';
+      badge.appendChild(svgWrap);
+      cell.appendChild(badge);
     }
+
+    // Badge de día lectivo especial — esquina inferior derecha
     if(isLectivo){
-      const lecIco=el('span',{style:{position:'absolute',bottom:1,right:2,width:11,height:11,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'var(--paper)',background:'var(--jorge)',borderRadius:'50%',padding:1.5,boxSizing:'border-box'}});
-      lecIco.innerHTML=ICONS.school||'';
-      cell.appendChild(lecIco);
+      const badge=document.createElement('div');
+      badge.style.position='absolute';
+      badge.style.bottom='2px';
+      badge.style.right='2px';
+      badge.style.width='12px';
+      badge.style.height='12px';
+      badge.style.borderRadius='50%';
+      badge.style.background='var(--jorge)';
+      badge.style.display='flex';
+      badge.style.alignItems='center';
+      badge.style.justifyContent='center';
+      const svgWrap=document.createElement('div');
+      svgWrap.style.width='8px';
+      svgWrap.style.height='8px';
+      svgWrap.style.color='#fff';
+      svgWrap.innerHTML=ICONS.school||'';
+      badge.appendChild(svgWrap);
+      cell.appendChild(badge);
     }
-    if(eventosDia.length){
-      const tipoInfo = EVENTO_TIPOS.find(t=>t.id===eventosDia[0].tipo)||EVENTO_TIPOS[EVENTO_TIPOS.length-1];
-      const miniIco=el('span',{style:{position:'absolute',top:2,right:2,width:14,height:14,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'var(--paper)',background:tipoInfo.color,borderRadius:'50%',padding:2,boxSizing:'border-box'}});
-      miniIco.innerHTML=ICONS[tipoInfo.iconKey]||'';
-      cell.appendChild(miniIco);
+
+    // Badge de evento de agenda (cumpleaños, etc.) — esquina superior derecha
+    if(agendaHoy.length){
+      const primerEvento=agendaHoy[0];
+      const tipoInfo=EVENTO_TIPOS.find(t=>t.id===primerEvento.tipo) || EVENTO_TIPOS[EVENTO_TIPOS.length-1];
+      const badge=document.createElement('div');
+      badge.style.position='absolute';
+      badge.style.top='2px';
+      badge.style.right='2px';
+      badge.style.width='15px';
+      badge.style.height='15px';
+      badge.style.borderRadius='50%';
+      badge.style.background=tipoInfo.color;
+      badge.style.display='flex';
+      badge.style.alignItems='center';
+      badge.style.justifyContent='center';
+      const svgWrap=document.createElement('div');
+      svgWrap.style.width='10px';
+      svgWrap.style.height='10px';
+      svgWrap.style.color='#fff';
+      svgWrap.innerHTML=ICONS[tipoInfo.iconKey]||'';
+      badge.appendChild(svgWrap);
+      cell.appendChild(badge);
     }
+
     grid.appendChild(cell);
   }
+
   cal.appendChild(grid);
   wrap.append(nav,leg,cal);
   return wrap;
@@ -1538,10 +1620,9 @@ function renderCalMonth(){
 
 function renderCalWeek(){
   const wrap=el('div',{});
-  // Get Monday of current week
   const ref=new Date(); ref.setHours(12,0,0,0);
-  const dow=ref.getDay(); const diff=dow===0?-6:1-dow;
-  ref.setDate(ref.getDate()+diff+UI.weekOffset*7);
+  const dow=ref.getDay(); const diffToMon=dow===0?-6:1-dow;
+  ref.setDate(ref.getDate()+diffToMon+(UI.weekOffset||0)*7);
 
   const nav=el('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}});
   nav.append(
@@ -1551,58 +1632,108 @@ function renderCalWeek(){
   );
 
   const dayMap={};
-  S.events.forEach(ev=>{
-    if(ev.changeStatus==='rechazado') return;
-    let d=new Date(ev.from+'T12:00:00'),end=new Date(ev.to+'T12:00:00');
-    while(d<=end){dayMap[d.toISOString().slice(0,10)]=ev;d.setDate(d.getDate()+1);}
-  });
-  const eventoMap={};
-  S.eventosAgenda.forEach(e=>{
-    const fk=(e.fecha||'').slice(0,10);
-    if(!fk) return;
-    if(!eventoMap[fk]) eventoMap[fk]=[];
-    eventoMap[fk].push(e);
-  });
+  for(const ev of S.events){
+    if(ev.changeStatus==='rechazado') continue;
+    const start=new Date(ev.from+'T12:00:00');
+    const end=new Date(ev.to+'T12:00:00');
+    if(isNaN(start.getTime())||isNaN(end.getTime())||start>end) continue;
+    let d=new Date(start);
+    let guard=0;
+    while(d<=end && guard<400){
+      dayMap[d.toISOString().slice(0,10)]=ev;
+      d.setDate(d.getDate()+1);
+      guard++;
+    }
+  }
+  const agendaMap={};
+  for(const e of S.eventosAgenda){
+    const fecha=String(e.fecha||'').slice(0,10);
+    if(!fecha) continue;
+    if(!agendaMap[fecha]) agendaMap[fecha]=[];
+    agendaMap[fecha].push(e);
+  }
 
   const DNAMES=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const hdrRow=el('div',{className:'week-row'});
   const bodyRow=el('div',{className:'week-row'});
+  const todayStr=today();
 
   for(let i=0;i<7;i++){
     const d=new Date(ref); d.setDate(d.getDate()+i);
     const key=d.toISOString().slice(0,10);
     const ev=dayMap[key];
-    const isTdy=key===today();
-    hdrRow.appendChild(el('div',{style:{textAlign:'center',fontSize:10,fontWeight:700,color:isTdy?'var(--jorge)':'var(--ink-soft)',paddingBottom:4}},DNAMES[i]));
+    const isTdy=(key===todayStr);
     const isFestD=isFestivo(key);
     const festNm=festivoName(key);
-    const eventosDia=eventoMap[key]||[];
-    const cell=el('div',{
-      className:'week-cell',
-      style:{background:ev?CUSTODY_BG[ev.who]:'var(--paper)',border:isTdy?'1px solid var(--jorge)':isFestD?'1px solid var(--accent)22':'1px solid var(--line)',cursor:(ev||isFestD||eventosDia.length)?'pointer':'default',position:'relative'},
-      title:isFestD?festNm:(eventosDia.length?eventosDia.map(e=>e.titulo).join(', '):''),
-      onClick:()=>{if(ev){UI.calSelected=ev;render();}else if(isFestD){alert('🎉 '+festNm);}else if(eventosDia.length){UI.calSelectedEventos=eventosDia;render();}}
+    const agendaHoy=agendaMap[key]||[];
+
+    const hdrCell=document.createElement('div');
+    hdrCell.style.textAlign='center'; hdrCell.style.fontSize='10px'; hdrCell.style.fontWeight='700';
+    hdrCell.style.color=isTdy?'var(--jorge)':'var(--ink-soft)'; hdrCell.style.paddingBottom='4px';
+    hdrCell.textContent=DNAMES[i];
+    hdrRow.appendChild(hdrCell);
+
+    const cell=document.createElement('div');
+    cell.className='week-cell';
+    cell.style.background=ev?CUSTODY_BG[ev.who]:'var(--paper)';
+    cell.style.border=isTdy?'1px solid var(--jorge)':(isFestD?'1px solid var(--accent)':'1px solid var(--line)');
+    cell.style.position='relative';
+    cell.style.cursor=(ev||isFestD||agendaHoy.length)?'pointer':'default';
+    const titleParts=[];
+    if(isFestD) titleParts.push(festNm);
+    if(agendaHoy.length) titleParts.push(agendaHoy.map(e=>e.titulo).join(', '));
+    if(titleParts.length) cell.title=titleParts.join(' · ');
+    cell.addEventListener('click',()=>{
+      if(ev){ UI.calSelected=ev; render(); }
+      else if(isFestD){ alert('🎉 '+festNm); }
+      else if(agendaHoy.length){ UI.calSelectedEventos=agendaHoy; render(); }
     });
-    cell.append(
-      el('div',{style:{fontSize:15,fontWeight:isTdy?800:600,color:ev?CUSTODY_TEXT[ev.who]:isFestD?'var(--accent)':'var(--ink-soft)'}},String(d.getDate())),
-      ev?el('div',{style:{fontSize:10,color:CUSTODY_TEXT[ev.who],fontWeight:700}},nameOf(ev.who)):el('div',{style:{fontSize:10,color:'var(--ink-soft)'}},'—')
-    );
+
+    const numDiv=document.createElement('div');
+    numDiv.style.fontSize='15px'; numDiv.style.fontWeight=isTdy?'800':'600';
+    numDiv.style.color=ev?CUSTODY_TEXT[ev.who]:(isFestD?'var(--accent)':'var(--ink-soft)');
+    numDiv.textContent=String(d.getDate());
+    cell.appendChild(numDiv);
+
+    const whoDiv=document.createElement('div');
+    whoDiv.style.fontSize='10px';
+    if(ev){ whoDiv.style.color=CUSTODY_TEXT[ev.who]; whoDiv.style.fontWeight='700'; whoDiv.textContent=nameOf(ev.who); }
+    else { whoDiv.style.color='var(--ink-soft)'; whoDiv.textContent='—'; }
+    cell.appendChild(whoDiv);
+
     if(isFestD){
-      const festIcoW=el('span',{style:{position:'absolute',bottom:2,left:2,width:12,height:12,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'var(--paper)',background:'var(--accent)',borderRadius:'50%',padding:1.5,boxSizing:'border-box'}});
-      festIcoW.innerHTML=ICONS.flag||'';
-      cell.appendChild(festIcoW);
+      const badge=document.createElement('div');
+      badge.style.position='absolute'; badge.style.bottom='2px'; badge.style.left='2px';
+      badge.style.width='13px'; badge.style.height='13px'; badge.style.borderRadius='50%';
+      badge.style.background='var(--accent)'; badge.style.display='flex';
+      badge.style.alignItems='center'; badge.style.justifyContent='center';
+      const svgWrap=document.createElement('div');
+      svgWrap.style.width='9px'; svgWrap.style.height='9px'; svgWrap.style.color='#fff';
+      svgWrap.innerHTML=ICONS.flag||'';
+      badge.appendChild(svgWrap);
+      cell.appendChild(badge);
     }
-    if(eventosDia.length){
-      const tipoInfo=EVENTO_TIPOS.find(t=>t.id===eventosDia[0].tipo)||EVENTO_TIPOS[EVENTO_TIPOS.length-1];
-      const miniIcoW=el('span',{style:{position:'absolute',top:3,right:3,width:15,height:15,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'var(--paper)',background:tipoInfo.color,borderRadius:'50%',padding:2,boxSizing:'border-box'}});
-      miniIcoW.innerHTML=ICONS[tipoInfo.iconKey]||'';
-      cell.appendChild(miniIcoW);
+    if(agendaHoy.length){
+      const primerEvento=agendaHoy[0];
+      const tipoInfo=EVENTO_TIPOS.find(t=>t.id===primerEvento.tipo) || EVENTO_TIPOS[EVENTO_TIPOS.length-1];
+      const badge=document.createElement('div');
+      badge.style.position='absolute'; badge.style.top='3px'; badge.style.right='3px';
+      badge.style.width='16px'; badge.style.height='16px'; badge.style.borderRadius='50%';
+      badge.style.background=tipoInfo.color; badge.style.display='flex';
+      badge.style.alignItems='center'; badge.style.justifyContent='center';
+      const svgWrap=document.createElement('div');
+      svgWrap.style.width='11px'; svgWrap.style.height='11px'; svgWrap.style.color='#fff';
+      svgWrap.innerHTML=ICONS[tipoInfo.iconKey]||'';
+      badge.appendChild(svgWrap);
+      cell.appendChild(badge);
     }
+
     bodyRow.appendChild(cell);
   }
   wrap.append(nav,hdrRow,bodyRow);
   return wrap;
 }
+
 
 // ── SOLICITUDES (según convenio) ──────────────────────────────────────────────
 // ── EVENTOS DE AGENDA (informativo, sin aprobación) ───────────────────────────
